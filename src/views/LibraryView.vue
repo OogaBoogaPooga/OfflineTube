@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useLibraryStore } from '../stores/library'
-import { formatBytes } from '../api/youtube-client'
+import { formatBytes } from '../api/piped-client'
 
 const library = useLibraryStore()
 onMounted(() => library.refresh())
