@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-export const DEFAULT_INSTANCE = 'https://invidious.nerdvpn.de'
+export const DEFAULT_INSTANCE = 'https://invidious.f5.si'
 
 export const useSettingsStore = defineStore('settings', {
   state: () => ({
