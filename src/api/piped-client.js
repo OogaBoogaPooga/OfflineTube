@@ -1,7 +1,7 @@
 import { Innertube } from 'youtubei.js';
 
-// permanent Suga backend URL
-const BACKEND_URL = 'https://geypb6i6zkwb-production-ko2pqs35.us-central1.suga.run';
+// Your Cloudflare Worker URL (NO trailing slash)
+const BACKEND_URL = 'https://offline-tube-proxy.logan-storrs.workers.dev';
 
 let yt;
 
