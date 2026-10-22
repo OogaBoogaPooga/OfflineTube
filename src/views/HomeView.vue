@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { api } from '../api/invidious'
+import { api } from '../api/youtube-client'
 import VideoGrid from '../components/VideoGrid.vue'
 
 const videos = ref([])
@@ -29,7 +29,6 @@ onMounted(load)
     <div v-else-if="error" class="text-red-400 text-sm py-8 text-center">
       <p class="mb-3">{{ error }}</p>
       <button @click="load" class="px-4 py-2 rounded-full bg-surface hover:bg-surface-2 text-text">Retry</button>
-      <p class="mt-3 text-xs text-muted">Check your instance URL in Settings.</p>
     </div>
     <VideoGrid v-else :videos="videos" />
   </div>
