@@ -12,43 +12,31 @@ export function bestThumbnail(video) {
 }
 
 export function pickStream(video, quality = 'highest') { 
-  return video.streamingData?.formats?.[0] || null; 
+  return video.formatStreams?.[0] || null; 
 }
 
-// Robust translator for the Scraper API response
 function mapVideo(v) {
-  // 1. Get Video ID
   let id = v.videoId || v.id;
-  if (!id && v.link) {
-    const match = v.link.match(/v=([^&]+)/);
-    if (match) id = match[1];
-  }
-  if (!id && v.url) {
-    const match = v.url.match(/v=([^&]+)/);
-    if (match) id = match[1];
-  }
+  if (!id && v.link) { const match = v.link.match(/v=([^&]+)/); if (match) id = match[1]; }
+  if (!id && v.url) { const match = v.url.match(/v=([^&]+)/); if (match) id = match[1]; }
 
-  // 2. Get Thumbnail URL (handle nested objects)
   let thumb = v.thumbnail || v.thumbnailUrl || v.image;
-  if (typeof thumb === 'object' && thumb !== null) {
-    thumb = thumb.url || thumb.static || thumb.src;
-  }
+  if (typeof thumb === 'object' && thumb !== null) thumb = thumb.url || thumb.static || thumb.src;
   if (!thumb && v.thumbnails && v.thumbnails.length > 0) {
     thumb = v.thumbnails[0].url || v.thumbnails[0];
     if (typeof thumb === 'object') thumb = thumb.url;
   }
 
-  // 3. Convert Duration to Seconds (e.g., "3:45" -> 225)
   let seconds = v.duration || v.length || v.lengthSeconds || 0;
   if (typeof seconds === 'string' && seconds.includes(':')) {
     const parts = seconds.split(':').map(Number);
-    if (parts.length === 2) seconds = parts[0] * 60 + parts[1]; // MM:SS
-    if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]; // HH:MM:SS
+    if (parts.length === 2) seconds = parts[0] * 60 + parts[1]; 
+    if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]; 
   }
   seconds = parseInt(seconds, 10) || 0;
 
   return {
-    videoId: id || Math.random().toString(36).substring(7), // Fallback ID if missing
+    videoId: id || Math.random().toString(36).substring(7),
     title: v.title || 'Unknown Title',
     author: v.channel?.name || v.channel || v.author || v.uploader || 'Unknown Channel',
     authorId: v.channel?.id || v.channel_id || '',
@@ -59,31 +47,60 @@ function mapVideo(v) {
 
 export const api = {
   popular: async () => {
-    const res = await fetch(`${BACKEND_URL}?path=search&search_query=trending`);
-    const data = await res.json();
+    // Use the actual YouTube trending URL
+    const targetUrl = encodeURIComponent('https://www.youtube.com/feed/trending');
+    const res = await fetch(`${BACKEND_URL}?path=trending&url=${targetUrl}`);
+    let data = await res.json();
     
-    if (data.error) throw new Error(`API Error: ${data.error}`);
-    if (data.organic_results) return data.organic_results.map(mapVideo);
+    // Fallback if trending endpoint fails, use search
+    if (data.error || !data.videos) {
+      const searchRes = await fetch(`${BACKEND_URL}?path=search&search_query=trending`);
+      data = await searchRes.json();
+      if (data.organic_results) return data.organic_results.map(mapVideo);
+      return [];
+    }
     
-    return [];
+    // Map the trending results
+    return (data.videos || []).map(mapVideo);
   },
   
   search: async (q, type = 'video') => {
     const res = await fetch(`${BACKEND_URL}?path=search&search_query=${encodeURIComponent(q)}`);
     const data = await res.json();
-    
     if (data.error) throw new Error(`API Error: ${data.error}`);
     if (data.organic_results) return data.organic_results.map(mapVideo);
-    
     return [];
   },
   
   video: async (id) => {
     const res = await fetch(`${BACKEND_URL}?path=video&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`);
     const data = await res.json();
-    
     if (data.error) throw new Error(`API Error: ${data.error}`);
     
-    return data.data || data.result || data;
+    const info = data.data || data.result || data;
+    
+    // Extract formats from the Scraper API response
+    let rawFormats = [];
+    if (info.streaming_data?.formats) rawFormats = info.streaming_data.formats;
+    else if (info.formats) rawFormats = info.formats;
+    else if (info.video_formats) rawFormats = info.video_formats;
+    
+    // Map the formats so the Player can use them
+    const formatStreams = rawFormats.map(f => ({
+      url: f.url,
+      qualityLabel: f.qualityLabel || f.quality || 'Video',
+      type: 'video/mp4'
+    }));
+
+    return {
+      videoId: info.videoId || id,
+      title: info.title || 'Unknown Title',
+      author: info.channel?.name || info.author || 'Unknown Channel',
+      authorId: info.channel?.id || '',
+      lengthSeconds: info.lengthSeconds || info.duration || 0,
+      description: info.description || '',
+      videoThumbnails: info.thumbnails ? info.thumbnails.map(t => ({ url: t.url })) : [],
+      formatStreams: formatStreams
+    };
   }
 };
