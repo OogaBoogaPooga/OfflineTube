@@ -40,6 +40,7 @@ async function setupPlayer() {
           const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`
           
           const options = { ...init }
+          // CRITICAL FIX: Strip body for GET/HEAD requests
           if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
             delete options.body
           }
