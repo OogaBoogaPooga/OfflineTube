@@ -1,8 +1,9 @@
 const http = require('http');
 
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 80;
 
 const server = http.createServer((req, res) => {
+  // Allow your Vercel frontend to talk to this backend
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -30,9 +31,14 @@ const server = http.createServer((req, res) => {
     headers: { ...req.headers }
   };
 
+  // Strip headers that break the proxy or cause YouTube to block the request
   delete options.headers.host;
   delete options.headers['content-length'];
+  delete options.headers['origin'];
+  delete options.headers['referer'];
+  delete options.headers['accept-encoding']; // Prevent compressed response from YouTube
 
+  // Force POST for YouTube's internal API
   if (targetUrl.includes('/youtubei/')) {
     options.method = 'POST';
   }
@@ -52,7 +58,15 @@ const server = http.createServer((req, res) => {
 function makeRequest(targetUrl, options, res) {
   fetch(targetUrl, options)
     .then(async (response) => {
-      res.writeHead(response.status, Object.fromEntries(response.headers));
+      // Convert headers to an object
+      const headers = Object.fromEntries(response.headers);
+      
+      // Remove compression headers so the browser doesn't try to unzip an already unzipped response
+      delete headers['content-encoding'];
+      delete headers['content-length'];
+      delete headers['x-content-type-options'];
+      
+      res.writeHead(response.status, headers);
       const arrayBuffer = await response.arrayBuffer();
       res.end(Buffer.from(arrayBuffer));
     })
@@ -63,7 +77,6 @@ function makeRequest(targetUrl, options, res) {
     });
 }
 
-// THE CRITICAL FIX: Bind to 0.0.0.0
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on 0.0.0.0:${PORT}`);
 });
