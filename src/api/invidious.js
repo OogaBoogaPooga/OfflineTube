@@ -7,9 +7,13 @@ function base() {
 
 async function j(path) {
   const url = base() + path
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`)
-  return res.json()
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return await res.json()
+  } catch (e) {
+    throw new Error(`Failed to load: ${e.message}. Check your instance in Settings.`)
+  }
 }
 
 export function resolveUrl(u) {
@@ -49,11 +53,14 @@ export function pickStream(video, quality = 'highest') {
 export function bestThumbnail(video) {
   const list = video.videoThumbnails || []
   if (!list.length) return null
+  let hit = null
   for (const q of ['maxres', 'high', 'medium', 'sddefault', 'default']) {
-    const hit = list.find(t => t.quality === q)
-    if (hit) return hit
+    hit = list.find(t => t.quality === q)
+    if (hit) break
   }
-  return list[0]
+  if (!hit) hit = list[0]
+  // Resolve relative URLs so thumbnails load correctly
+  return { ...hit, url: resolveUrl(hit.url) }
 }
 
 export function formatBytes(n) {
