@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { downloadVideo } from '../services/downloader'
 import { useLibraryStore } from './library'
+import { bestThumbnail } from '../api/invidious'
 
 export const useDownloadsStore = defineStore('downloads', {
   state: () => ({ active: {} }),
@@ -19,7 +20,7 @@ export const useDownloadsStore = defineStore('downloads', {
       this.active[id] = {
         id,
         title: video.title,
-        thumbnail: video.videoThumbnails?.[0]?.url || video.thumbnail || null,
+        thumbnail: bestThumbnail(video)?.url || video.thumbnail || null,
         progress: 0,
         status: 'downloading',
         controller
