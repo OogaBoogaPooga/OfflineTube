@@ -1,6 +1,5 @@
-// Test this with a free Scraper API key (e.g., youtubescraperapi.com)
-const API_KEY = 'cd_live_Ff9tud64P2lQMijGqow8oI1HgyZ7ECS1';
-const BASE_URL = 'https://api.youtubescraperapi.com/api/v1/youtube';
+// src/api/piped-client.js
+const BACKEND_URL = '/api/proxy';
 
 export function resolveUrl(u) { return u; }
 export function formatBytes(n) { if (!n) return '0 B'; const units = ['B', 'KB', 'MB', 'GB']; let i = 0; while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; } return `${n.toFixed(n < 10 ? 1 : 0)} ${units[i]}`; }
@@ -10,17 +9,18 @@ export function pickStream(video, quality = 'highest') { return video.streamingD
 
 export const api = {
   popular: async () => {
-    const res = await fetch(`${BASE_URL}/search?q=trending&api_key=${API_KEY}`);
+    // This now calls YOUR proxy, which adds the API key
+    const res = await fetch(`${BACKEND_URL}?path=search&search_query=trending`);
     const data = await res.json();
     return data.videos || [];
   },
   search: async (q, type = 'video') => {
-    const res = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(q)}&api_key=${API_KEY}`);
+    const res = await fetch(`${BACKEND_URL}?path=search&search_query=${encodeURIComponent(q)}`);
     const data = await res.json();
     return data.videos || [];
   },
   video: async (id) => {
-    const res = await fetch(`${BASE_URL}/video?url=https://www.youtube.com/watch?v=${id}&api_key=${API_KEY}`);
+    const res = await fetch(`${BACKEND_URL}?path=video&url=https://www.youtube.com/watch?v=${id}`);
     return await res.json();
   }
 };
