@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, pickStream, resolveUrl } from '../api/invidious'
+import { api, pickStream } from '../api/youtube-client'
 import { useDownloadsStore } from '../stores/downloads'
 import { useSettingsStore } from '../stores/settings'
 import VideoCard from '../components/VideoCard.vue'
@@ -58,7 +58,7 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
       <div class="flex items-start gap-4 mb-6">
         <img
           v-if="playlist.playlistThumbnail"
-          :src="resolveUrl(playlist.playlistThumbnail)"
+          :src="playlist.playlistThumbnail"
           class="w-40 rounded-lg object-cover"
         />
         <div class="flex-1 min-w-0">
