@@ -5,7 +5,7 @@ let yt;
 async function getClient() {
   if (!yt) {
     yt = await Innertube.create({
-      // Use stable WEB client, removed TV_EMBEDDED which causes player ID errors
+      // Use stable WEB client
       retrieve_player: false,
       fetch: async (input, init = {}) => {
         const url = typeof input === 'string' ? input : input.url;
@@ -13,7 +13,7 @@ async function getClient() {
         
         const options = { ...init };
         
-        // Strip body for GET/HEAD requests (the proxy will force POST for /youtubei/ anyway)
+        // Strip body for GET/HEAD requests
         if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
           delete options.body;
         }
@@ -75,6 +75,7 @@ function translateVideo(video) {
 export const api = {
   popular: async () => {
     const yt = await getClient();
+    // Use getHomeFeed() instead of getTrending()
     const feed = await yt.getHomeFeed();
     return feed.videos.map(translateVideo);
   },
