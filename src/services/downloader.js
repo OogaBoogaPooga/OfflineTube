@@ -1,4 +1,4 @@
-import { resolveUrl } from '../api/invidious'
+import { resolveUrl, bestThumbnail } from '../api/invidious'
 import { db, clearChunks } from '../db'
 
 const CHUNK_SIZE = 2 * 1024 * 1024
@@ -18,7 +18,7 @@ export async function downloadVideo(video, streamUrl, { onProgress, signal } = {
     author: video.author,
     authorId: video.authorId,
     lengthSeconds: video.lengthSeconds,
-    thumbnail: video.videoThumbnails?.[0]?.url || null,
+    thumbnail: bestThumbnail(video)?.url || null,
     status: 'downloading',
     progress: 0,
     size: 0,
