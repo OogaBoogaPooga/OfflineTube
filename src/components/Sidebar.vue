@@ -1,6 +1,10 @@
 <script setup>
 import { RouterLink } from 'vue-router'
 
+defineProps({
+  isOpen: { type: Boolean, required: true }
+})
+
 const nav = [
   { to: '/', label: 'Trending', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
   { to: '/subscriptions', label: 'Subscriptions', icon: 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z' },
@@ -20,8 +24,8 @@ function handleLogin() {
 </script>
 
 <template>
-  <aside class="w-60 h-screen bg-sidebar flex flex-col fixed left-0 top-0 border-r border-white/5 z-40">
-    <RouterLink to="/" class="flex items-center gap-3 px-5 h-14 mb-2">
+  <aside class="w-60 h-screen bg-sidebar flex flex-col fixed left-0 top-0 border-r border-white/5 z-40 transition-transform duration-300" :class="isOpen ? 'translate-x-0' : '-translate-x-full'">
+    <RouterLink to="/" class="flex items-center gap-3 px-5 h-14 mb-2 shrink-0">
       <div class="w-8 h-8 rounded-md bg-accent flex items-center justify-center">
         <svg viewBox="0 0 24 24" class="w-5 h-5 text-white" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
       </div>
@@ -35,7 +39,7 @@ function handleLogin() {
       </RouterLink>
     </nav>
 
-    <div class="px-2 pb-4 space-y-1 border-t border-white/5 pt-2">
+    <div class="px-2 pb-4 space-y-1 border-t border-white/5 pt-2 shrink-0">
       <RouterLink v-for="item in bottomNav" :key="item.to" :to="item.to" class="flex items-center gap-4 px-3 py-2.5 rounded-md hover:bg-surface text-sm font-medium transition-colors" active-class="bg-surface text-accent">
         <svg viewBox="0 0 24 24" class="w-5 h-5 fill-current" v-html="`<path d='${item.icon}'/>`"></svg>
         {{ item.label }}
