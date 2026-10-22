@@ -25,7 +25,7 @@ const settings = useSettingsStore()
     </section>
 
     <section class="text-xs text-muted">
-      <p>Offline Tube · v0.1.0</p>
+      <p>Offline Tube · v0.1.5</p>
     </section>
   </div>
 </template>
