@@ -30,7 +30,6 @@ async function setupPlayer() {
     }
   } else if (props.videoId) {
     try {
-      // The api object is now imported from the Piped client
       const { api } = await import('../api/piped-client')
       const video = await api.video(props.videoId)
       const stream = video.formatStreams?.[0]
