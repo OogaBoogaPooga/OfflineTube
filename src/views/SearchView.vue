@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, resolveUrl } from '../api/invidious'
+import { api } from '../api/youtube-client'
 import VideoGrid from '../components/VideoGrid.vue'
 
 const route = useRoute()
@@ -64,7 +64,7 @@ watch(type, () => run())
         :to="`/channel/${c.authorId}`"
         class="flex items-center gap-3 p-3 bg-surface rounded-lg hover:bg-surface-2"
       >
-        <img v-if="c.authorThumbnails?.[0]?.url" :src="resolveUrl(c.authorThumbnails[0].url)" class="w-12 h-12 rounded-full object-cover" />
+        <img v-if="c.authorThumbnails?.[0]?.url" :src="c.authorThumbnails[0].url" class="w-12 h-12 rounded-full object-cover" />
         <div class="min-w-0">
           <div class="font-medium truncate">{{ c.author }}</div>
           <div class="text-xs text-muted truncate">{{ c.subCount }} subs · {{ c.videoCount }} videos</div>
@@ -78,7 +78,7 @@ watch(type, () => run())
         :to="`/playlist/${p.playlistId}`"
         class="block bg-surface rounded-lg overflow-hidden hover:bg-surface-2"
       >
-        <img v-if="p.playlistThumbnail" :src="resolveUrl(p.playlistThumbnail)" class="w-full aspect-video object-cover" />
+        <img v-if="p.playlistThumbnail" :src="p.playlistThumbnail" class="w-full aspect-video object-cover" />
         <div class="p-3">
           <div class="font-medium line-clamp-2 text-sm">{{ p.title }}</div>
           <div class="text-xs text-muted mt-1">{{ p.author }} · {{ p.videoCount }} items</div>
