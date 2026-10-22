@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import shaka from 'shaka-player/dist/shaka-player.compiled.js'
-import { Innertube } from 'youtubei.js'
+import { Innertube, ClientType } from 'youtubei.js'
 
 const props = defineProps({
   videoId: { type: String, default: null },
@@ -32,6 +32,9 @@ async function setupPlayer() {
   } else if (props.videoId) {
     try {
       const yt = await Innertube.create({
+        client_type: ClientType.TV_EMBEDDED,
+        retrieve_player: false,
+        generate_session_locally: true,
         fetch: async (input, init) => {
           const url = typeof input === 'string' ? input : input.url
           return fetch(`/api/proxy?url=${encodeURIComponent(url)}`, init)
@@ -40,7 +43,6 @@ async function setupPlayer() {
       const info = await yt.getInfo(props.videoId)
       const manifest = await info.toDash(url => `/api/proxy?url=${encodeURIComponent(url)}`)
       
-      // Create blob URL for the DASH manifest
       const manifestBlob = new Blob([manifest], { type: 'application/dash+xml' })
       const manifestUrl = URL.createObjectURL(manifestBlob)
       
