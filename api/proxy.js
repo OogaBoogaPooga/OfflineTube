@@ -24,9 +24,11 @@ export default async function handler(req, res) {
       headers,
     };
 
+    // CRITICAL FIX: Strip body for GET/HEAD requests
     if (req.method === 'POST' && req.body) {
       fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     }
+    // If method is GET or HEAD, we do NOT attach a body.
 
     const response = await fetch(url, fetchOptions);
 
