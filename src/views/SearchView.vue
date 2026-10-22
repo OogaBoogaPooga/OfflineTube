@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api } from '../api/youtube-client'
+import { api } from '../api/piped-client'
 import VideoGrid from '../components/VideoGrid.vue'
 
 const route = useRoute()
