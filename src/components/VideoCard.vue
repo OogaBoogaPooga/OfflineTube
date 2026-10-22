@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { bestThumbnail, formatDuration } from '../api/invidious'
+import { bestThumbnail, formatDuration } from '../api/youtube-client'
 
 const props = defineProps({
   video: { type: Object, required: true }
