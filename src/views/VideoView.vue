@@ -1,10 +1,9 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, pickStream, bestThumbnail, resolveUrl, formatDuration, formatBytes } from '../api/invidious'
+import { api, bestThumbnail, formatDuration } from '../api/youtube-client'
 import { useDownloadsStore } from '../stores/downloads'
 import { useLibraryStore } from '../stores/library'
-import { useSettingsStore } from '../stores/settings'
 import { db } from '../db'
 import Player from '../components/Player.vue'
 import DownloadModal from '../components/DownloadModal.vue'
@@ -12,7 +11,6 @@ import DownloadModal from '../components/DownloadModal.vue'
 const route = useRoute()
 const downloads = useDownloadsStore()
 const library = useLibraryStore()
-const settings = useSettingsStore()
 
 const video = ref(null)
 const comments = ref([])
@@ -22,14 +20,7 @@ const showComments = ref(false)
 const showModal = ref(false)
 
 const isOffline = computed(() => library.videos.some(v => v.id === route.params.id && v.status === 'complete'))
-const stream = computed(() => video.value ? pickStream(video.value, settings.defaultQuality) : null)
 const poster = computed(() => video.value ? (bestThumbnail(video.value)?.url || null) : null)
-
-const playback = computed(() => {
-  if (isOffline.value) return { offlineVideoId: route.params.id, src: null }
-  if (stream.value) return { offlineVideoId: null, src: resolveUrl(stream.value.url) }
-  return { offlineVideoId: null, src: null }
-})
 
 async function load(id) {
   loading.value = true
@@ -80,8 +71,8 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
     <div v-else-if="video">
       <div class="aspect-video bg-black rounded-xl overflow-hidden">
         <Player
-          :src="playback.src"
-          :offline-video-id="playback.offlineVideoId"
+          :video-id="isOffline ? null : route.params.id"
+          :offline-video-id="isOffline ? route.params.id : null"
           :poster="poster"
         />
       </div>
@@ -94,9 +85,6 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
         </RouterLink>
         <span v-if="video.lengthSeconds" class="text-muted text-xs">
           {{ formatDuration(video.lengthSeconds) }}
-        </span>
-        <span v-if="stream?.contentLength" class="text-muted text-xs">
-          {{ formatBytes(parseInt(stream.contentLength, 10)) }}
         </span>
 
         <div class="ml-auto flex items-center gap-2">
