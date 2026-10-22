@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { bestThumbnail, formatDuration } from '../api/youtube-client'
+import { bestThumbnail, formatDuration } from '../api/piped-client'
 
 const props = defineProps({
   video: { type: Object, required: true }
