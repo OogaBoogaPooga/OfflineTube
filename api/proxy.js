@@ -11,19 +11,23 @@ export default async function handler(req, res) {
   if (!url) return res.status(400).json({ error: 'Missing url' });
 
   try {
-    // Forward ALL headers from the client
     const headers = { ...req.headers };
-    // Remove headers that can cause issues with the proxy itself
     delete headers.host;
     delete headers.connection;
     delete headers['content-length'];
 
+    // FORCE POST for YouTube's internal API, which rejects GET
+    let method = req.method;
+    if (url.includes('/youtubei/')) {
+      method = 'POST';
+    }
+
     const fetchOptions = {
-      method: req.method,
+      method,
       headers,
     };
 
-    if (req.method === 'POST' && req.body) {
+    if (method === 'POST' && req.body) {
       fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     }
 
@@ -31,7 +35,6 @@ export default async function handler(req, res) {
 
     res.status(response.status);
     response.headers.forEach((value, key) => {
-      // Skip encoding headers that interfere with the proxy
       if (!['content-encoding', 'transfer-encoding'].includes(key.toLowerCase())) {
         res.setHeader(key, value);
       }
