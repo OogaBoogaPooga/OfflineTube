@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { api } from '../api/youtube-client'
+import { api } from '../api/piped-client'
 import VideoGrid from '../components/VideoGrid.vue'
 
 const videos = ref([])
@@ -12,7 +12,7 @@ async function load() {
   error.value = null
   try {
     const data = await api.popular()
-    videos.value = data.filter(v => v.type === 'video' || v.videoId)
+    videos.value = data.filter(v => v.videoId)
   } catch (e) {
     error.value = String(e.message || e)
   } finally {
