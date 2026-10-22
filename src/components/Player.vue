@@ -1,7 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import shaka from 'shaka-player/dist/shaka-player.compiled.js'
-import { Innertube } from 'youtubei.js'
 
 const props = defineProps({
   videoId: { type: String, default: null },
@@ -31,28 +30,15 @@ async function setupPlayer() {
     }
   } else if (props.videoId) {
     try {
-      const yt = await Innertube.create({
-        retrieve_player: false,
-        fetch: async (input, init = {}) => {
-          const url = typeof input === 'string' ? input : input.url
-          const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`
-          
-          const options = { ...init }
-          if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
-            delete options.body
-          }
-          
-          return fetch(proxyUrl, options)
-        },
-      })
-      
-      const info = await yt.getInfo(props.videoId)
-      const manifest = await info.toDash(url => `/api/proxy?url=${encodeURIComponent(url)}`)
-      
-      const manifestBlob = new Blob([manifest], { type: 'application/dash+xml' })
-      const manifestUrl = URL.createObjectURL(manifestBlob)
-      
-      await player.load(manifestUrl)
+      // The api object is now imported from the Piped client
+      const { api } = await import('../api/piped-client')
+      const video = await api.video(props.videoId)
+      const stream = video.formatStreams?.[0]
+      if (stream) {
+        await player.load(stream.url, undefined, 'video/mp4')
+      } else {
+        error.value = 'No playable stream found.'
+      }
     } catch (e) {
       error.value = e.message || 'Playback failed'
     }
