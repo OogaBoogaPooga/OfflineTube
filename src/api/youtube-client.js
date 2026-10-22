@@ -1,14 +1,26 @@
-import { Innertube } from 'youtubei.js';
+import { Innertube, ClientType } from 'youtubei.js';
 
 let yt;
 
 async function getClient() {
   if (!yt) {
     yt = await Innertube.create({
+      // Use the embedded TV client to bypass player ID issues
+      client_type: ClientType.TV_EMBEDDED,
+      retrieve_player: false,
+      generate_session_locally: true,
+      // Custom fetch to route through your Vercel proxy
       fetch: async (input, init) => {
         const url = typeof input === 'string' ? input : input.url;
         const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-        return fetch(proxyUrl, init);
+        
+        // Ensure headers are passed correctly
+        const headers = {
+          ...init?.headers,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        };
+
+        return fetch(proxyUrl, { ...init, headers });
       },
     });
   }
