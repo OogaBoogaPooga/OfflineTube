@@ -1,6 +1,6 @@
 <script setup>
 import { useDownloadsStore } from '../stores/downloads'
-import { formatBytes } from '../api/youtube-client'
+import { formatBytes } from '../api/piped-client'
 
 const props = defineProps({
   video: { type: Object, required: true }
