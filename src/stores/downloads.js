@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { downloadVideo } from '../services/downloader'
 import { useLibraryStore } from './library'
-import { bestThumbnail } from '../api/invidious'
+import { bestThumbnail } from '../api/youtube-client'
 
 export const useDownloadsStore = defineStore('downloads', {
   state: () => ({ active: {} }),
