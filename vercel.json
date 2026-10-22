@@ -1,15 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "yarn build",
-  "outputDirectory": "dist",
-  "rewrites": [
-    {
-      "source": "/api/proxy",
-      "destination": "/api/proxy"
-    },
-    {
-      "source": "/((?!api/.*\\.\\w+$).*)",
-      "destination": "/index.html"
-    }
-  ]
+  "outputDirectory": "dist"
 }
