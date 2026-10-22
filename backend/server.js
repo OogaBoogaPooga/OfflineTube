@@ -1,10 +1,8 @@
 const http = require('http');
 
-// Suga is configured to route to port 10000. We must match it.
 const PORT = process.env.PORT || 10000;
 
 const server = http.createServer((req, res) => {
-  // CORS headers for Vercel frontend
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -14,12 +12,13 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  // Health check
-  if (req.url === '/health') {
+  // 1. HEALTH CHECK: Return 200 for the root path so Suga doesn't kill the app
+  if (req.url === '/' || req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ status: 'ok' }));
+    return res.end(JSON.stringify({ status: 'ok', message: 'Proxy is healthy' }));
   }
 
+  // 2. PROXY LOGIC: Process requests with ?url=
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
   const targetUrl = parsedUrl.searchParams.get('url');
 
@@ -33,14 +32,12 @@ const server = http.createServer((req, res) => {
     headers: { ...req.headers }
   };
 
-  // Strip problematic headers
   delete options.headers.host;
   delete options.headers['content-length'];
   delete options.headers['origin'];
   delete options.headers['referer'];
-  delete options.headers['accept-encoding']; // Prevents compression issues
+  delete options.headers['accept-encoding'];
 
-  // Force POST for YouTube's internal API
   if (targetUrl.includes('/youtubei/')) {
     options.method = 'POST';
   }
@@ -61,7 +58,6 @@ function makeRequest(targetUrl, options, res) {
   fetch(targetUrl, options)
     .then(async (response) => {
       const headers = Object.fromEntries(response.headers);
-      // Prevent the browser from choking on compression headers
       delete headers['content-encoding'];
       delete headers['content-length'];
       delete headers['x-content-type-options'];
