@@ -15,32 +15,52 @@ export default async function handler(req, res) {
   }
 
   const SCRAPER_API_BASE = 'https://api.youtubescraperapi.com/api/v1/youtube';
-  // Your API key should be an environment variable on Vercel for security
-  const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY; 
+  const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY;
+
+  // Log whether the key is present (but not the key itself) for debugging
+  console.log('API Key Present:', !!SCRAPER_API_KEY);
+
+  if (!SCRAPER_API_KEY) {
+    return res.status(500).json({ error: 'SCRAPER_API_KEY environment variable is not set' });
+  }
 
   const targetUrl = new URL(`${SCRAPER_API_BASE}/${path}`);
-  if (SCRAPER_API_KEY) {
-    targetUrl.searchParams.set('api_key', SCRAPER_API_KEY);
-  }
+  targetUrl.searchParams.set('api_key', SCRAPER_API_KEY);
+  
   for (const key in query) {
     targetUrl.searchParams.set(key, query[key]);
   }
 
   try {
+    console.log('Requesting:', targetUrl.toString());
     const response = await fetch(targetUrl.toString());
     
+    const responseBody = await response.text();
+    console.log(`API Response Status: ${response.status}`);
+    console.log(`API Response Body: ${responseBody}`);
+
+    if (!response.ok) {
+      // Try to parse the error from the API to give a clearer message
+      let errorMessage = `API Error: ${response.status}`;
+      try {
+        const errorJson = JSON.parse(responseBody);
+        errorMessage = errorJson.error || errorJson.message || errorMessage;
+      } catch (e) {
+        // Not JSON, just use the text
+      }
+      return res.status(response.status).json({ error: errorMessage });
+    }
+
     res.status(response.status);
     response.headers.forEach((value, key) => {
-      // Do not forward content-length or encoding headers
       if (!['content-length', 'content-encoding'].includes(key.toLowerCase())) {
         res.setHeader(key, value);
       }
     });
 
-    const data = await response.text(); // Use text to preserve the JSON body
-    res.send(data);
+    res.send(responseBody);
   } catch (error) {
     console.error('Proxy error:', error);
-    res.status(500).json({ error: 'Proxy failed' });
+    res.status(500).json({ error: 'Proxy fetch failed', details: error.message });
   }
 }
