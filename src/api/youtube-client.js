@@ -1,19 +1,31 @@
-import { Innertube } from 'youtubei.js';
+import { Innertube, ClientType } from 'youtubei.js';
 
 let yt;
 
 async function getClient() {
   if (!yt) {
     yt = await Innertube.create({
-      // Use stable default client. Removed TV_EMBEDDED which is deprecated.
-      // The library now handles player IDs and tokens automatically.
+      client_type: ClientType.TV_EMBEDDED,
+      retrieve_player: false,
+      generate_session_locally: true,
+      device_category: 'mobile',
       fetch: async (input, init = {}) => {
         const url = typeof input === 'string' ? input : input.url;
         const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
         
         const options = { ...init };
-        
-        // Strip body for GET/HEAD requests to prevent 405 errors
+        options.headers = options.headers || {};
+
+        // Inject headers for iframe requests to satisfy YouTube's checks
+        if (url.includes('iframe')) {
+          options.headers['User-Agent'] = yt?.session.context.client.userAgent ?? '';
+          options.headers['X-Goog-Visitor-Id'] = yt?.session.context.client.visitorData ?? '';
+          options.headers['X-Youtube-Client-Version'] = yt?.session.context.client.clientVersion ?? '';
+          options.headers['X-Youtube-Client-Name'] = yt?.session.context.client.clientName ?? '';
+          options.headers['Origin'] = 'https://www.youtube.com';
+        }
+
+        // Strip body for GET/HEAD requests
         if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
           delete options.body;
         }
@@ -75,7 +87,6 @@ function translateVideo(video) {
 export const api = {
   popular: async () => {
     const yt = await getClient();
-    // Use getHomeFeed() as getTrending() is unreliable
     const feed = await yt.getHomeFeed();
     return feed.videos.map(translateVideo);
   },
@@ -88,16 +99,16 @@ export const api = {
   video: async (id) => {
     const yt = await getClient();
     const info = await yt.getInfo(id);
+    // With retrieve_player: false, deciphered formats may already be available
     const formats = info.streaming_data?.formats || [];
-    const decipheredFormats = await Promise.all(
-      formats.map(async (f) => ({
-        url: await f.decipher(yt.session.player),
-        qualityLabel: f.quality_label,
-        contentLength: f.content_length,
-        container: f.container,
-        type: 'video/mp4',
-      }))
-    );
+    const decipheredFormats = formats.map(f => ({
+      url: f.url || f.decipher?.(yt.session.player) || '',
+      qualityLabel: f.quality_label,
+      contentLength: f.content_length,
+      container: f.container,
+      type: 'video/mp4',
+    })).filter(f => f.url);
+
     return {
       videoId: info.basic_info.id,
       title: info.basic_info.title,
