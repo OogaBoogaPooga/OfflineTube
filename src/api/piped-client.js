@@ -8,7 +8,7 @@ let yt;
 async function getClient() {
   if (!yt) {
     yt = await Innertube.create({
-      client_type: 'WEB_CREATOR', // This client type is less likely to trigger 400 errors
+      client_type: 'WEB', // Switched back to WEB, which is most reliable for search
       generate_session_locally: true,
       retrieve_player: false,
       fetch: async (input, init = {}) => {
