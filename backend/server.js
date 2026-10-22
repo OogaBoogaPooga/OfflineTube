@@ -1,9 +1,10 @@
 const http = require('http');
 
-const PORT = process.env.PORT || 80;
+// Suga is configured to route to port 10000. We must match it.
+const PORT = process.env.PORT || 10000;
 
 const server = http.createServer((req, res) => {
-  // Allow your Vercel frontend to talk to this backend
+  // CORS headers for Vercel frontend
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -13,6 +14,7 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
+  // Health check
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ status: 'ok' }));
@@ -31,12 +33,12 @@ const server = http.createServer((req, res) => {
     headers: { ...req.headers }
   };
 
-  // Strip headers that break the proxy or cause YouTube to block the request
+  // Strip problematic headers
   delete options.headers.host;
   delete options.headers['content-length'];
   delete options.headers['origin'];
   delete options.headers['referer'];
-  delete options.headers['accept-encoding']; // Prevent compressed response from YouTube
+  delete options.headers['accept-encoding']; // Prevents compression issues
 
   // Force POST for YouTube's internal API
   if (targetUrl.includes('/youtubei/')) {
@@ -58,10 +60,8 @@ const server = http.createServer((req, res) => {
 function makeRequest(targetUrl, options, res) {
   fetch(targetUrl, options)
     .then(async (response) => {
-      // Convert headers to an object
       const headers = Object.fromEntries(response.headers);
-      
-      // Remove compression headers so the browser doesn't try to unzip an already unzipped response
+      // Prevent the browser from choking on compression headers
       delete headers['content-encoding'];
       delete headers['content-length'];
       delete headers['x-content-type-options'];
