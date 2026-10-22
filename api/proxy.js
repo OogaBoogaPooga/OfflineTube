@@ -14,6 +14,7 @@ export default async function handler(req, res) {
 
   try {
     const headers = { ...req.headers };
+    // Strip only headers that break the proxy, NOT the ones YouTube needs for bot detection
     delete headers.host;
     delete headers.connection;
     delete headers['content-length'];
