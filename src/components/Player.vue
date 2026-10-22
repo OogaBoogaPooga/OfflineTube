@@ -35,11 +35,19 @@ async function setupPlayer() {
         client_type: ClientType.TV_EMBEDDED,
         retrieve_player: false,
         generate_session_locally: true,
-        fetch: async (input, init) => {
+        fetch: async (input, init = {}) => {
           const url = typeof input === 'string' ? input : input.url
-          return fetch(`/api/proxy?url=${encodeURIComponent(url)}`, init)
+          const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`
+          
+          const options = { ...init }
+          if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
+            delete options.body
+          }
+          
+          return fetch(proxyUrl, options)
         },
       })
+      
       const info = await yt.getInfo(props.videoId)
       const manifest = await info.toDash(url => `/api/proxy?url=${encodeURIComponent(url)}`)
       
