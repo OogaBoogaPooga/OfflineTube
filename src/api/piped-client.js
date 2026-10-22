@@ -11,6 +11,11 @@ async function getClient() {
       retrieve_player: false,
       fetch: async (input, init = {}) => {
         const url = typeof input === 'string' ? input : input.url;
+        
+        if (!url) {
+          throw new Error('Cannot proxy an undefined URL');
+        }
+
         const proxyUrl = `${BACKEND_URL}?url=${encodeURIComponent(url)}`;
         
         const options = { ...init };
@@ -72,10 +77,11 @@ function translateVideo(video) {
 }
 
 export const api = {
+  // Changed to use search instead of getHomeFeed to bypass the broken /browse endpoint
   popular: async () => {
     const yt = await getClient();
-    const feed = await yt.getHomeFeed();
-    return feed.videos.map(translateVideo);
+    const results = await yt.search('trending', { type: 'video' });
+    return results.videos.map(translateVideo);
   },
   search: async (q, type = 'video') => {
     const yt = await getClient();
