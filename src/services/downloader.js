@@ -1,4 +1,4 @@
-import { resolveUrl } from '../api/youtube-client'
+import { resolveUrl } from '../api/piped-client'
 import { db, clearChunks } from '../db'
 
 const CHUNK_SIZE = 2 * 1024 * 1024
