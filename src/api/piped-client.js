@@ -6,7 +6,6 @@ export function formatBytes(n) { if (!n) return '0 B'; const units = ['B', 'KB',
 export function formatDuration(seconds) { const s = parseInt(seconds, 10) || 0; const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const ss = s % 60; return (h ? `${h}:` : '') + `${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`; }
 
 export function bestThumbnail(video) { 
-  // Handle different thumbnail structures the API might return
   if (video.thumbnails && Array.isArray(video.thumbnails)) return video.thumbnails[0];
   if (video.thumbnail) return { url: video.thumbnail };
   return null;
@@ -18,40 +17,52 @@ export function pickStream(video, quality = 'highest') {
 
 export const api = {
   popular: async () => {
-    // Pass the full YouTube search URL to the API
-    const targetUrl = encodeURIComponent('https://www.youtube.com/results?search_query=trending');
-    const res = await fetch(`${BACKEND_URL}?path=search&url=${targetUrl}`);
+    // Use 'search_query' instead of 'url' or 'q'
+    const res = await fetch(`${BACKEND_URL}?path=search&search_query=trending`);
     const data = await res.json();
     
-    // Handle different array names the API might use
+    // LOG THE RAW RESPONSE so we can see it in the console!
+    console.log("Raw API Response for Trending:", data);
+    
+    if (data.error) throw new Error(`API Error: ${data.error}`);
+    
+    // Try to find the array in various common formats
     if (Array.isArray(data)) return data;
     if (data.videos) return data.videos;
     if (data.results) return data.results;
     if (data.data) return data.data;
+    if (data.items) return data.items;
+    if (data.search_results) return data.search_results;
     
     return [];
   },
   
   search: async (q, type = 'video') => {
-    const targetUrl = encodeURIComponent(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`);
-    const res = await fetch(`${BACKEND_URL}?path=search&url=${targetUrl}`);
+    const res = await fetch(`${BACKEND_URL}?path=search&search_query=${encodeURIComponent(q)}`);
     const data = await res.json();
+    
+    console.log(`Raw API Response for Search (${q}):`, data);
+    
+    if (data.error) throw new Error(`API Error: ${data.error}`);
     
     if (Array.isArray(data)) return data;
     if (data.videos) return data.videos;
     if (data.results) return data.results;
     if (data.data) return data.data;
+    if (data.items) return data.items;
+    if (data.search_results) return data.search_results;
     
     return [];
   },
   
   video: async (id) => {
-    // Pass the full YouTube watch URL to the API
-    const targetUrl = encodeURIComponent(`https://www.youtube.com/watch?v=${id}`);
-    const res = await fetch(`${BACKEND_URL}?path=video&url=${targetUrl}`);
+    const res = await fetch(`${BACKEND_URL}?path=video&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`);
     const data = await res.json();
     
-    // Return the video object
+    console.log(`Raw API Response for Video (${id}):`, data);
+    
+    if (data.error) throw new Error(`API Error: ${data.error}`);
+    
     return data.data || data.result || data;
   }
 };
