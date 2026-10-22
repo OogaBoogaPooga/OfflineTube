@@ -1,0 +1,55 @@
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import { VitePWA } from 'vite-plugin-pwa'
+
+export default defineConfig({
+  plugins: [
+    vue(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg'],
+      manifest: {
+        name: 'Offline Tube',
+        short_name: 'OfflineTube',
+        description: 'Self-hosted YouTube frontend with offline playback',
+        theme_color: '#0f0f0f',
+        background_color: '#0f0f0f',
+        display: 'standalone',
+        start_url: '/',
+        scope: '/',
+        icons: [
+          { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/v1/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'invidious-api',
+              networkTimeoutSeconds: 6,
+              expiration: { maxEntries: 100, maxAgeSeconds: 3600 }
+            }
+          },
+          {
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith('/vi/') || url.hostname.endsWith('ytimg.com'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'thumbnails',
+              expiration: { maxEntries: 800, maxAgeSeconds: 7 * 24 * 3600 }
+            }
+          }
+        ]
+      }
+    })
+  ],
+  optimizeDeps: {
+    include: ['shaka-player/dist/shaka-player.compiled.js']
+  }
+})
