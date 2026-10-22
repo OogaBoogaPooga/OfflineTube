@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import shaka from 'shaka-player/dist/shaka-player.compiled.js'
-import { Innertube, ClientType } from 'youtubei.js'
+import { Innertube } from 'youtubei.js'
 
 const props = defineProps({
   videoId: { type: String, default: null },
@@ -32,15 +32,12 @@ async function setupPlayer() {
   } else if (props.videoId) {
     try {
       const yt = await Innertube.create({
-        client_type: ClientType.TV_EMBEDDED,
-        retrieve_player: false,
-        generate_session_locally: true,
+        // Removed client_type and retrieve_player
         fetch: async (input, init = {}) => {
           const url = typeof input === 'string' ? input : input.url
           const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`
           
           const options = { ...init }
-          // CRITICAL FIX: Strip body for GET/HEAD requests
           if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
             delete options.body
           }
