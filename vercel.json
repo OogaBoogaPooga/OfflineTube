@@ -3,6 +3,13 @@
   "buildCommand": "yarn build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/((?!.*\\.\\w+$).*)", "destination": "/index.html" }
+    {
+      "source": "/api/proxy",
+      "destination": "/api/proxy"
+    },
+    {
+      "source": "/((?!api/.*\\.\\w+$).*)",
+      "destination": "/index.html"
+    }
   ]
 }
