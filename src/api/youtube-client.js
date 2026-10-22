@@ -1,25 +1,17 @@
-import { Innertube, ClientType } from 'youtubei.js';
+import { Innertube } from 'youtubei.js';
 
 let yt;
 
 async function getClient() {
   if (!yt) {
     yt = await Innertube.create({
-      client_type: ClientType.TV_EMBEDDED,
-      retrieve_player: false,
-      generate_session_locally: true,
+      // Removed client_type and retrieve_player to use the stable default client
       fetch: async (input, init = {}) => {
         const url = typeof input === 'string' ? input : input.url;
         const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
         
-        const headers = {
-          ...init.headers,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        };
-        
-        const options = { ...init, headers };
-        
-        // Fix: Request with GET/HEAD method cannot have body
+        const options = { ...init };
+        // Ensure GET/HEAD requests do not have a body
         if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
           delete options.body;
         }
