@@ -36,7 +36,7 @@ onMounted(load)
     </div>
     
     <div v-else-if="!videos.length" class="text-muted text-sm py-8 text-center">
-      No videos found. Check your Vercel Environment Variables to ensure `SCRAPER_API_KEY` is set.
+      No videos found. The API returned an empty list.
     </div>
 
     <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-6">
