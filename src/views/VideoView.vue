@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, bestThumbnail, formatDuration } from '../api/youtube-client'
+import { api, bestThumbnail, formatDuration, formatBytes } from '../api/piped-client'
 import { useDownloadsStore } from '../stores/downloads'
 import { useLibraryStore } from '../stores/library'
 import { db } from '../db'
@@ -20,7 +20,9 @@ const showComments = ref(false)
 const showModal = ref(false)
 
 const isOffline = computed(() => library.videos.some(v => v.id === route.params.id && v.status === 'complete'))
+const stream = computed(() => video.value?.formatStreams?.[0])
 const poster = computed(() => video.value ? (bestThumbnail(video.value)?.url || null) : null)
+
 const playback = computed(() => {
   if (isOffline.value) return { offlineVideoId: route.params.id, src: null }
   if (stream.value) return { offlineVideoId: null, src: stream.value.url }
@@ -90,6 +92,9 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
         </RouterLink>
         <span v-if="video.lengthSeconds" class="text-muted text-xs">
           {{ formatDuration(video.lengthSeconds) }}
+        </span>
+        <span v-if="stream?.contentLength" class="text-muted text-xs">
+          {{ formatBytes(parseInt(stream.contentLength, 10)) }}
         </span>
 
         <div class="ml-auto flex items-center gap-2">
