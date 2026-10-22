@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, resolveUrl } from '../api/invidious'
+import { api } from '../api/youtube-client'
 import VideoGrid from '../components/VideoGrid.vue'
 
 const route = useRoute()
@@ -45,7 +45,7 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
       <div class="flex items-center gap-4 mb-6">
         <img
           v-if="channel.authorThumbnails?.[0]?.url"
-          :src="resolveUrl(channel.authorThumbnails[0].url)"
+          :src="channel.authorThumbnails[0].url"
           class="w-20 h-20 rounded-full object-cover"
         />
         <div>
