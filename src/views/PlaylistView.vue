@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, pickStream } from '../api/youtube-client'
+import { api, pickStream } from '../api/piped-client'
 import { useDownloadsStore } from '../stores/downloads'
 import { useSettingsStore } from '../stores/settings'
 import VideoCard from '../components/VideoCard.vue'
