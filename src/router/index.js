@@ -1,0 +1,19 @@
+import { createRouter, createWebHistory } from 'vue-router'
+
+const routes = [
+  { path: '/',        name: 'home',      component: () => import('../views/HomeView.vue') },
+  { path: '/search',  name: 'search',    component: () => import('../views/SearchView.vue') },
+  { path: '/watch/:id', name: 'watch',   component: () => import('../views/VideoView.vue') },
+  { path: '/channel/:id', name: 'channel', component: () => import('../views/ChannelView.vue') },
+  { path: '/playlist/:id', name: 'playlist', component: () => import('../views/PlaylistView.vue') },
+  { path: '/downloads', name: 'downloads', component: () => import('../views/DownloadsView.vue') },
+  { path: '/library',   name: 'library',   component: () => import('../views/LibraryView.vue') },
+  { path: '/settings',  name: 'settings',  component: () => import('../views/SettingsView.vue') },
+  { path: '/:pathMatch(.*)*', redirect: '/' }
+]
+
+export default createRouter({
+  history: createWebHistory(),
+  routes,
+  scrollBehavior: () => ({ top: 0 })
+})
