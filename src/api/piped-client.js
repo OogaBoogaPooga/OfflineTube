@@ -8,6 +8,8 @@ let yt;
 async function getClient() {
   if (!yt) {
     yt = await Innertube.create({
+      client_type: 'WEB',
+      generate_session_locally: true,
       retrieve_player: false,
       fetch: async (input, init = {}) => {
         const url = typeof input === 'string' ? input : input.url;
@@ -77,7 +79,6 @@ function translateVideo(video) {
 }
 
 export const api = {
-  // Changed to use search instead of getHomeFeed to bypass the broken /browse endpoint
   popular: async () => {
     const yt = await getClient();
     const results = await yt.search('trending', { type: 'video' });
