@@ -19,16 +19,21 @@ export default async function handler(req, res) {
       headers['Content-Type'] = req.headers['content-type'];
     }
 
+    // Determine the correct method: force POST for YouTube internal API
+    let method = req.method;
+    if (url.includes('/youtubei/')) {
+      method = 'POST';
+    }
+
     const fetchOptions = {
-      method: req.method,
+      method,
       headers,
     };
 
-    // CRITICAL FIX: Strip body for GET/HEAD requests
-    if (req.method === 'POST' && req.body) {
+    // Only attach a body for POST requests
+    if (method === 'POST' && req.body) {
       fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     }
-    // If method is GET or HEAD, we do NOT attach a body.
 
     const response = await fetch(url, fetchOptions);
 
