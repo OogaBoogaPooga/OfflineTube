@@ -1,5 +1,5 @@
 // We are using the Invidious instance you found that has CORS and API enabled
-const INVIDIOUS_INSTANCE = 'https://invidious.f5.si';
+const INVIDIOUS_INSTANCE = 'https://inv.thepixora.com';
 
 function base() {
   return INVIDIOUS_INSTANCE.replace(/\/+$/, '');
