@@ -1,7 +1,7 @@
 import { Innertube } from 'youtubei.js';
 
-// Your Cloudflare Worker URL (NO trailing slash)
-const BACKEND_URL = 'https://offline-tube-proxy.logan-storrs.workers.dev';
+// Your exact GoDaddy URL including the share token
+const BACKEND_URL = 'https://67ffivubyq.preview.c38.airoapp.ai/?airoShareToken=ifMQzZ5i8TmD';
 
 let yt;
 
@@ -18,7 +18,10 @@ async function getClient() {
           throw new Error('Cannot proxy an undefined URL');
         }
 
-        const proxyUrl = `${BACKEND_URL}?url=${encodeURIComponent(url)}`;
+        // Safely append the URL parameter without breaking the airoShareToken
+        const proxyUrlObj = new URL(BACKEND_URL);
+        proxyUrlObj.searchParams.set('url', url);
+        const proxyUrl = proxyUrlObj.toString();
         
         const options = { ...init };
         if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
