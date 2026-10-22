@@ -1,16 +1,29 @@
-import { Innertube } from 'youtubei.js';
+import { Innertube, ClientType } from 'youtubei.js';
 
 let yt;
 
 async function getClient() {
   if (!yt) {
     yt = await Innertube.create({
-      // Removed client_type and retrieve_player to use the stable default client
+      client_type: ClientType.TV_EMBEDDED,
+      retrieve_player: false,
+      generate_session_locally: true,
       fetch: async (input, init = {}) => {
         const url = typeof input === 'string' ? input : input.url;
         const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
         
         const options = { ...init };
+        options.headers = options.headers || {};
+        
+        // Inject headers required for TV_EMBEDDED client
+        if (url.includes('iframe')) {
+          options.headers['User-Agent'] = yt?.session.context.client.userAgent ?? '';
+          options.headers['X-Goog-Visitor-Id'] = yt?.session.context.client.visitorData ?? '';
+          options.headers['X-Youtube-Client-Version'] = yt?.session.context.client.clientVersion ?? '';
+          options.headers['X-Youtube-Client-Name'] = yt?.session.context.client.clientName ?? '';
+          options.headers['Origin'] = 'https://www.youtube.com';
+        }
+
         // Ensure GET/HEAD requests do not have a body
         if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
           delete options.body;
