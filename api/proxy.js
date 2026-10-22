@@ -1,8 +1,10 @@
 export default async function handler(req, res) {
+  // Set CORS headers to allow your Vercel app to call this function
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
 
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -11,35 +13,30 @@ export default async function handler(req, res) {
   if (!url) return res.status(400).json({ error: 'Missing url' });
 
   try {
-    const headers = {
-      'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
-      'Accept-Language': 'en-US,en;q=0.9',
-    };
-    if (req.headers['content-type']) {
-      headers['Content-Type'] = req.headers['content-type'];
-    }
-
-    // Determine the correct method: force POST for YouTube internal API
-    let method = req.method;
-    if (url.includes('/youtubei/')) {
-      method = 'POST';
-    }
+    // Pass through all headers from the client, including YouTube's custom security headers
+    const headers = { ...req.headers };
+    // Remove headers that cause issues with the proxy
+    delete headers.host;
+    delete headers.connection;
+    delete headers['content-length'];
 
     const fetchOptions = {
-      method,
+      method: req.method,
       headers,
     };
 
-    // Only attach a body for POST requests
-    if (method === 'POST' && req.body) {
+    if (req.method === 'POST' && req.body) {
       fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     }
 
     const response = await fetch(url, fetchOptions);
 
     res.status(response.status);
+    
+    // Pass response headers back to the client
     response.headers.forEach((value, key) => {
-      if (key.toLowerCase() !== 'content-encoding') {
+      // Skip encoding headers as they can interfere with the proxy
+      if (!['content-encoding', 'transfer-encoding'].includes(key.toLowerCase())) {
         res.setHeader(key, value);
       }
     });
