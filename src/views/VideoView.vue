@@ -21,6 +21,11 @@ const showModal = ref(false)
 
 const isOffline = computed(() => library.videos.some(v => v.id === route.params.id && v.status === 'complete'))
 const poster = computed(() => video.value ? (bestThumbnail(video.value)?.url || null) : null)
+const playback = computed(() => {
+  if (isOffline.value) return { offlineVideoId: route.params.id, src: null }
+  if (stream.value) return { offlineVideoId: null, src: stream.value.url }
+  return { offlineVideoId: null, src: null }
+})
 
 async function load(id) {
   loading.value = true
