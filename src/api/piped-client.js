@@ -1,26 +1,30 @@
-// We are using the Invidious instance you found that has CORS and API enabled
-const INVIDIOUS_INSTANCE = 'https://inv.thepixora.com';
+import { Innertube } from 'youtubei.js';
 
-function base() {
-  return INVIDIOUS_INSTANCE.replace(/\/+$/, '');
-}
+// permanent Suga backend URL
+const BACKEND_URL = 'https://geypb6i6zkwb-production-ko2pqs35.us-central1.suga.run';
 
-async function j(path) {
-  const url = base() + path;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (e) {
-    throw new Error(`Invidious API failed: ${e.message}`);
+let yt;
+
+async function getClient() {
+  if (!yt) {
+    yt = await Innertube.create({
+      retrieve_player: false,
+      fetch: async (input, init = {}) => {
+        const url = typeof input === 'string' ? input : input.url;
+        const proxyUrl = `${BACKEND_URL}?url=${encodeURIComponent(url)}`;
+        
+        const options = { ...init };
+        if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
+          delete options.body;
+        }
+        return fetch(proxyUrl, options);
+      },
+    });
   }
+  return yt;
 }
 
-export function resolveUrl(u) {
-  if (!u) return u;
-  if (/^https?:\/\//i.test(u)) return u;
-  return base() + (u.startsWith('/') ? u : '/' + u);
-}
+export function resolveUrl(u) { return u; }
 
 export function formatBytes(n) {
   if (!n) return '0 B';
@@ -41,74 +45,98 @@ export function formatDuration(seconds) {
 export function bestThumbnail(video) {
   const list = video.videoThumbnails || [];
   if (!list.length) return null;
-  let hit = null;
-  for (const q of ['maxres', 'high', 'medium', 'sddefault', 'default']) {
-    hit = list.find(t => t.quality === q);
-    if (hit) break;
-  }
-  if (!hit) hit = list[0];
-  return { ...hit, url: resolveUrl(hit.url) };
+  return list[0];
 }
 
 export function pickStream(video, quality = 'highest') {
-  const formats = (video.formatStreams || []).filter(f => {
-    const t = (f.type || '').toLowerCase();
-    const c = (f.container || '').toLowerCase();
-    return t.includes('mp4') || c === 'mp4';
-  });
+  const formats = video.formatStreams || [];
   if (!formats.length) return null;
-  
   const sorted = [...formats].sort((a, b) => {
-    const hA = parseInt(a.height || a.resolution) || 0;
-    const hB = parseInt(b.height || b.resolution) || 0;
+    const hA = parseInt(a.qualityLabel) || 0;
+    const hB = parseInt(b.qualityLabel) || 0;
     return hB - hA;
   });
-  
   if (quality === 'lowest') return sorted[sorted.length - 1];
-  if (quality === 'medium' && sorted.length > 1) return sorted[Math.floor(sorted.length / 2)];
   return sorted[0];
 }
 
-// --- API Translation Layer ---
+function translateVideo(video) {
+  return {
+    videoId: video.id,
+    title: video.title?.toString() || 'Untitled',
+    author: video.author?.name || 'Unknown',
+    authorId: video.author?.id,
+    lengthSeconds: video.duration?.seconds || 0,
+    videoThumbnails: video.thumbnails?.map(t => ({ url: t.url })) || [],
+  };
+}
 
 export const api = {
   popular: async () => {
-    return await j('/api/v1/popular');
+    const yt = await getClient();
+    const feed = await yt.getHomeFeed();
+    return feed.videos.map(translateVideo);
   },
-
   search: async (q, type = 'video') => {
-    return await j(`/api/v1/search?q=${encodeURIComponent(q)}&type=${type}`);
+    const yt = await getClient();
+    const results = await yt.search(q, { type });
+    if (type === 'video') return results.videos.map(translateVideo);
+    return results;
   },
-
   video: async (id) => {
-    return await j(`/api/v1/videos/${id}`);
-  },
+    const yt = await getClient();
+    const info = await yt.getInfo(id);
+    const formats = info.streaming_data?.formats || [];
+    const decipheredFormats = formats.map(f => ({
+      url: f.url || f.decipher?.(yt.session.player) || '',
+      qualityLabel: f.quality_label,
+      contentLength: f.content_length,
+      container: f.container,
+      type: 'video/mp4',
+    })).filter(f => f.url);
 
+    return {
+      videoId: info.basic_info.id,
+      title: info.basic_info.title,
+      author: info.basic_info.author,
+      authorId: info.basic_info.channel_id,
+      lengthSeconds: info.basic_info.duration,
+      description: info.basic_info.short_description,
+      videoThumbnails: info.basic_info.thumbnail?.map(t => ({ url: t.url })) || [],
+      formatStreams: decipheredFormats,
+    };
+  },
   channel: async (id) => {
-    const data = await j(`/api/v1/channels/${id}`);
+    const yt = await getClient();
+    const channel = await yt.getChannel(id);
+    const videos = await channel.videos.next();
     return {
-      author: data.author,
-      authorId: id,
-      authorThumbnails: data.authorThumbnails,
-      subCount: data.subCount,
-      description: data.description,
-      latestVideos: data.latestVideos || []
+      author: channel.header.author.name,
+      authorId: channel.header.author.id,
+      authorThumbnails: channel.header.author.thumbnails || [],
+      subCount: channel.header.subscriber_count?.text,
+      description: channel.metadata.description,
+      latestVideos: videos.videos.map(translateVideo),
     };
   },
-
   playlist: async (id) => {
-    const data = await j(`/api/v1/playlists/${id}`);
+    const yt = await getClient();
+    const playlist = await yt.getPlaylist(id);
     return {
-      title: data.title,
-      author: data.author,
-      playlistThumbnail: data.playlistThumbnail,
-      videoCount: data.videoCount,
-      videos: data.videos || []
+      title: playlist.info.title,
+      author: playlist.info.author.name,
+      playlistThumbnail: playlist.info.thumbnails?.[0]?.url,
+      videoCount: playlist.items.length,
+      videos: playlist.items.map(translateVideo),
     };
   },
-
   comments: async (id) => {
-    const data = await j(`/api/v1/comments/${id}`);
-    return data.comments || [];
-  }
+    const yt = await getClient();
+    const comments = await yt.getComments(id);
+    return comments.contents.map(c => ({
+      commentId: c.comment_id,
+      author: c.author.name,
+      content: c.content.toString(),
+    }));
+  },
 };
