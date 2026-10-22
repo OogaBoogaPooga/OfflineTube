@@ -12,11 +12,12 @@ export default async function handler(req, res) {
 
   try {
     const headers = { ...req.headers };
+    // Remove headers that cause issues with the proxy
     delete headers.host;
     delete headers.connection;
     delete headers['content-length'];
 
-    // FORCE POST for YouTube's internal API, which rejects GET
+    // FORCE POST for YouTube's internal API
     let method = req.method;
     if (url.includes('/youtubei/')) {
       method = 'POST';
@@ -27,6 +28,7 @@ export default async function handler(req, res) {
       headers,
     };
 
+    // Only attach body for POST requests
     if (method === 'POST' && req.body) {
       fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     }
