@@ -5,6 +5,7 @@
 html, body, #app { height: 100%; }
 
 body {
+  zoom: 0.9;
   font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
