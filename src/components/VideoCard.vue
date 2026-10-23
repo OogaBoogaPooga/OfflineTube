@@ -9,9 +9,13 @@ const props = defineProps({
 const thumb = computed(() => bestThumbnail(props.video))
 const duration = computed(() => props.video.lengthSeconds ? formatDuration(props.video.lengthSeconds) : null)
 const authorName = computed(() => props.video.author || props.video.authorName || '')
+const avatar = computed(() => props.video.authorAvatar || null)
 
 const handleImageError = (e) => {
   e.target.src = 'https://placehold.co/400x225/1f1f1f/aaaaaa?text=No+Thumbnail'
+}
+const handleAvatarError = (e) => {
+  e.target.src = `https://ui-avatars.com/api/?name=${authorName.value.charAt(0)}&background=282828&color=fff`
 }
 </script>
 
@@ -31,9 +35,17 @@ const handleImageError = (e) => {
         class="absolute bottom-1.5 right-1.5 bg-black/80 text-[11px] px-1.5 py-0.5 rounded"
       >{{ duration }}</span>
     </div>
-    <div class="mt-2 min-w-0">
-      <h3 class="font-medium text-sm line-clamp-2 group-hover:text-white">{{ video.title }}</h3>
-      <p v-if="authorName" class="text-xs text-muted mt-1 truncate">{{ authorName }}</p>
+    <div class="mt-3 flex gap-3">
+      <!-- Channel Avatar -->
+      <div class="w-9 h-9 rounded-full bg-surface-2 flex-shrink-0 overflow-hidden">
+        <img v-if="avatar" :src="avatar" @error="handleAvatarError" class="w-full h-full object-cover" />
+        <div v-else class="w-full h-full flex items-center justify-center font-bold text-muted text-sm">{{ authorName.charAt(0) }}</div>
+      </div>
+      
+      <div class="min-w-0 flex-1">
+        <h3 class="font-bold text-sm line-clamp-2 group-hover:text-white">{{ video.title }}</h3>
+        <p class="text-xs text-muted mt-1 truncate">{{ authorName }}</p>
+      </div>
     </div>
   </RouterLink>
 </template>
