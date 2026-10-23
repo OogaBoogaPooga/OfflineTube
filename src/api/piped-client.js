@@ -1,14 +1,36 @@
 // src/api/piped-client.js
 import { Innertube, ClientType } from 'youtubei.js';
 
-// A reliable public CORS proxy
-const CORS_PROXY = 'https://corsproxy.io/?';
+// A rotation of reliable CORS proxies
+const CORS_PROXIES = [
+  'https://corsproxy.io/?',
+  'https://api.codetabs.com/v1/proxy?quest=',
+  'https://api.allorigins.win/raw?url='
+];
 
 function getProxyFetch() {
   return async (input, init = {}) => {
-    const url = typeof input === 'string' ? input : input.url;
-    const proxyUrl = `${CORS_PROXY}${encodeURIComponent(url)}`;
-    return fetch(proxyUrl, init);
+    let url = typeof input === 'string' ? input : (input?.url || input?.href);
+    
+    // Catch the "undefined" crash before it happens
+    if (!url || url === 'undefined') {
+      return new Response(JSON.stringify({}), { 
+        status: 200, 
+        headers: { 'Content-Type': 'application/json' } 
+      });
+    }
+
+    // Try each proxy until one works
+    for (const proxy of CORS_PROXIES) {
+      try {
+        const proxyUrl = `${proxy}${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl, init);
+        if (response.ok) return response;
+      } catch (e) {
+        // Silently fail and try the next proxy
+      }
+    }
+    throw new Error('All CORS proxies failed');
   };
 }
 
@@ -30,23 +52,22 @@ function mapYTNode(v) {
 
 export const api = {
   popular: async (page = 1) => {
-    // Using the IOS client for a better home feed
     try {
       const yt = await Innertube.create({ 
-        client_type: ClientType.IOS, 
+        client_type: ClientType.TV_EMBEDDED, 
+        retrieve_player: false, // PREVENTS THE CRASH
         generate_session_locally: true,
         fetch: getProxyFetch()
       });
       
-      // If page is 1, try to get the actual home feed
       if (page === 1) {
-        const feed = await yt.getHomeFeed();
-        if (feed.videos && feed.videos.length > 0) {
-          return feed.videos.map(mapYTNode);
-        }
+        try {
+          const feed = await yt.getHomeFeed();
+          if (feed.videos && feed.videos.length > 0) return feed.videos.map(mapYTNode);
+        } catch (e) {}
       }
       
-      // Fallback for pagination or if home feed fails
+      // Fallback to searches for pagination or if home feed fails
       const queries = ['trending videos', 'popular tech', 'gaming highlights', 'news today', 'top documentaries'];
       const query = queries[(page - 1) % queries.length];
       const results = await yt.search(query, { type: 'video' });
@@ -60,7 +81,8 @@ export const api = {
   search: async (q, type = 'video') => {
     try {
       const yt = await Innertube.create({ 
-        client_type: ClientType.IOS, 
+        client_type: ClientType.TV_EMBEDDED, 
+        retrieve_player: false,
         generate_session_locally: true,
         fetch: getProxyFetch()
       });
@@ -72,7 +94,8 @@ export const api = {
   channel: async (id) => {
     try {
       const yt = await Innertube.create({ 
-        client_type: ClientType.IOS, 
+        client_type: ClientType.TV_EMBEDDED, 
+        retrieve_player: false,
         generate_session_locally: true,
         fetch: getProxyFetch()
       });
@@ -93,9 +116,9 @@ export const api = {
 
   video: async (id) => {
     try {
-      // Switch to IOS client to unlock higher quality muxed streams (720p/1080p)
       const yt = await Innertube.create({ 
-        client_type: ClientType.IOS, 
+        client_type: ClientType.TV_EMBEDDED, 
+        retrieve_player: false,
         generate_session_locally: true,
         fetch: getProxyFetch()
       });
@@ -137,7 +160,8 @@ export const api = {
   comments: async (id) => {
     try {
       const yt = await Innertube.create({ 
-        client_type: ClientType.WEB, 
+        client_type: ClientType.TV_EMBEDDED, 
+        retrieve_player: false,
         generate_session_locally: true,
         fetch: getProxyFetch()
       });
