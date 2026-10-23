@@ -1,8 +1,8 @@
 // src/api/piped-client.js
 import { Innertube, ClientType } from 'youtubei.js';
 
-// PASTE YOUR CLOUDFLARE WORKER URL HERE (NO trailing slash)
-const CORS_PROXY_URL = 'https://offline-tube-cors-proxy.logan-storrs.workers.dev/';
+// YOUR CLOUDFLARE WORKER URL
+const CORS_PROXY_URL = 'https://offline-tube-cors-proxy.logan-storrs.workers.dev';
 
 function getProxyFetch() {
   return async (input, init = {}) => {
@@ -13,9 +13,15 @@ function getProxyFetch() {
     }
 
     const proxyUrl = `${CORS_PROXY_URL}?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl, init);
     
-    // Debugging: If the Worker returns an error (403, 500, etc.), log it
+    // THE FIX: Strip the body for GET/HEAD requests to satisfy the browser
+    const options = { ...init };
+    if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
+      delete options.body;
+    }
+
+    const response = await fetch(proxyUrl, options);
+    
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`[Worker Error] ${response.status} on URL: ${url}`, errorText);
