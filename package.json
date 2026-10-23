@@ -1,7 +1,7 @@
 {
   "name": "offline-tube",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "packageManager": "yarn@4.5.0",
   "scripts": {
@@ -11,9 +11,9 @@
   },
   "dependencies": {
     "dexie": "^4.0.8",
-    "https-proxy-agent": "^7.0.5",
     "pinia": "^2.2.2",
     "shaka-player": "^4.10.7",
+    "undici": "^6.19.2",
     "vue": "^3.4.38",
     "vue-router": "^4.4.3",
     "workbox-window": "^7.3.0",
