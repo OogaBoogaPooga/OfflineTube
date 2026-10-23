@@ -1,25 +1,24 @@
-import Dexie from 'dexie'
+import { createRouter, createWebHistory } from 'vue-router'
 
-export const db = new Dexie('offline-tube')
+const routes = [
+  { path: '/',        name: 'home',      component: () => import('../views/HomeView.vue') },
+  { path: '/search',  name: 'search',    component: () => import('../views/SearchView.vue') },
+  { path: '/watch/:id', name: 'watch',   component: () => import('../views/VideoView.vue') },
+  { path: '/channel/:id', name: 'channel', component: () => import('../views/ChannelView.vue') },
+  { path: '/playlist/:id', name: 'playlist', component: () => import('../views/PlaylistView.vue') },
+  { path: '/downloads', name: 'downloads', component: () => import('../views/DownloadsView.vue') },
+  { path: '/library',   name: 'library',   component: () => import('../views/LibraryView.vue') },
+  { path: '/settings',  name: 'settings',  component: () => import('../views/SettingsView.vue') },
+  // Placeholder routes for OAuth-required pages
+  { path: '/subscriptions', component: () => import('../views/PlaceholderView.vue'), props: { title: 'Subscriptions' } },
+  { path: '/channels',      component: () => import('../views/PlaceholderView.vue'), props: { title: 'Channels' } },
+  { path: '/playlists',     component: () => import('../views/PlaceholderView.vue'), props: { title: 'Playlists' } },
+  { path: '/history',       component: () => import('../views/PlaceholderView.vue'), props: { title: 'History' } },
+  { path: '/:pathMatch(.*)*', redirect: '/' }
+]
 
-db.version(1).stores({
-  videos: 'id, title, author, status, downloadedAt, addedAt',
-  chunks: '++id, videoId, seq, [videoId+seq]'
+export default createRouter({
+  history: createWebHistory(),
+  routes,
+  scrollBehavior: () => ({ top: 0 })
 })
-
-export async function assembleBlob(videoId) {
-  const chunks = await db.chunks.where('videoId').equals(videoId).toArray()
-  chunks.sort((a, b) => a.seq - b.seq)
-  return new Blob(chunks.map(c => c.blob), { type: 'video/mp4' })
-}
-
-export async function clearChunks(videoId) {
-  await db.chunks.where('videoId').equals(videoId).delete()
-}
-
-export async function deleteVideo(id) {
-  await db.transaction('rw', db.videos, db.chunks, async () => {
-    await db.chunks.where('videoId').equals(id).delete()
-    await db.videos.delete(id)
-  })
-}
