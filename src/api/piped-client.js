@@ -3,16 +3,17 @@ import { Innertube } from 'youtubei.js';
 
 const BACKEND_PROXY = '/api/proxy';
 
-// Only 1 public instance has CORS + API enabled right now
+// TIER 1: Direct Invidious (Only f5.si has CORS enabled right now)
 const INVIDIOUS_INSTANCES = [
-  'https://invidious.f5.si'
+  'https://invidious.f5.si',
+  'https://inv.thepixora.com'
 ];
 
-// Piped instances as a backup (some public Piped instances still work)
+// TIER 2: Piped (Routed through Vercel proxy to avoid CORS)
 const PIPED_INSTANCES = [
-  'https://pipedapi.kavin.rocks',
   'https://api.piped.private.coffee',
-  'https://pipedapi.adminforge.de'
+  'https://pipedapi.leptons.xyz',
+  'https://pipedapi.nosebs.ru'
 ];
 
 // Helper to construct a guaranteed working YouTube thumbnail
@@ -30,7 +31,7 @@ function normalizeInvidiousVideo(v) {
     author: v.author || 'Unknown',
     authorId: v.authorId || '',
     lengthSeconds: v.lengthSeconds || 0,
-    videoThumbnails: getThumbnail(id) // Force a working thumbnail
+    videoThumbnails: getThumbnail(id)
   };
 }
 
@@ -42,7 +43,7 @@ function normalizePipedVideo(v) {
     author: v.uploaderName || v.uploader || 'Unknown',
     authorId: v.uploaderUrl ? v.uploaderUrl.replace('/channel/', '') : '',
     lengthSeconds: v.duration || 0,
-    videoThumbnails: getThumbnail(id) // Force a working thumbnail
+    videoThumbnails: getThumbnail(id)
   };
 }
 
@@ -66,13 +67,17 @@ async function fetchFromInvidious(endpoint) {
 async function fetchFromPiped(endpoint) {
   for (const instance of PIPED_INSTANCES) {
     try {
-      const res = await fetch(`${instance}${endpoint}`);
+      const targetUrl = `${instance}${endpoint}`;
+      // Route Piped through your Vercel proxy to bypass CORS!
+      const proxyUrl = `${BACKEND_PROXY}?url=${encodeURIComponent(targetUrl)}`;
+      
+      const res = await fetch(proxyUrl);
       if (res.ok) {
         const data = await res.json();
         if (data && !data.error) return data;
       }
     } catch (e) {
-      console.warn(`Piped instance ${instance} failed.`);
+      console.warn(`Piped instance ${instance} (via proxy) failed.`);
     }
   }
   throw new Error('All Piped instances failed');
@@ -82,17 +87,19 @@ async function fetchFromPiped(endpoint) {
 
 export const api = {
   popular: async () => {
+    // 1. Try Invidious Direct
     try {
-      // Use the newly verified instance for trending
       const data = await fetchFromInvidious('/api/v1/popular');
       return data.map(normalizeInvidiousVideo);
     } catch (e) { console.warn('Invidious popular failed, trying Piped...'); }
 
+    // 2. Try Piped via Proxy
     try {
       const data = await fetchFromPiped('/trending?region=US');
       return data.map(normalizePipedVideo);
-    } catch (e) { console.warn('Piped popular failed, trying Vercel Proxy...'); }
+    } catch (e) { console.warn('Piped popular failed, trying youtubei.js...'); }
 
+    // 3. Fallback to youtubei.js via Proxy
     const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
     const results = await yt.search('trending', { type: 'video' });
     return results.videos.map(v => ({
@@ -106,18 +113,21 @@ export const api = {
   },
 
   search: async (q, type = 'video') => {
+    // 1. Try Invidious Direct
     try {
       const data = await fetchFromInvidious(`/api/v1/search?q=${encodeURIComponent(q)}&type=${type}`);
       return data.map(normalizeInvidiousVideo);
     } catch (e) { console.warn('Invidious search failed, trying Piped...'); }
 
+    // 2. Try Piped via Proxy
     try {
       const filter = type === 'video' ? 'videos' : 'channels';
       const data = await fetchFromPiped(`/search?q=${encodeURIComponent(q)}&filter=${filter}`);
       const items = data.items || data;
       return items.map(normalizePipedVideo);
-    } catch (e) { console.warn('Piped search failed, trying Vercel Proxy...'); }
+    } catch (e) { console.warn('Piped search failed, trying youtubei.js...'); }
 
+    // 3. Fallback to youtubei.js via Proxy
     const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
     const results = await yt.search(q, { type });
     if (type === 'video') {
@@ -134,6 +144,7 @@ export const api = {
   },
 
   video: async (id) => {
+    // 1. Try Invidious Direct
     try {
       const data = await fetchFromInvidious(`/api/v1/videos/${id}`);
       return {
@@ -148,6 +159,7 @@ export const api = {
       };
     } catch (e) { console.warn('Invidious video failed, trying Piped...'); }
 
+    // 2. Try Piped via Proxy
     try {
       const data = await fetchFromPiped(`/streams/${id}`);
       const muxed = data.videoStreams?.find(s => !s.videoOnly);
@@ -167,8 +179,9 @@ export const api = {
           type: 'video/mp4'
         }] : []
       };
-    } catch (e) { console.warn('Piped video failed, trying Vercel Proxy...'); }
+    } catch (e) { console.warn('Piped video failed, trying youtubei.js...'); }
 
+    // 3. Fallback to youtubei.js via Proxy
     const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
     const info = await yt.getInfo(id);
     const formats = info.streaming_data?.formats || [];
