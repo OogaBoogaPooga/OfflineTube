@@ -25,12 +25,6 @@ const isOffline = computed(() => library.videos.some(v => v.id === route.params.
 const stream = computed(() => video.value?.formatStreams?.[0])
 const poster = computed(() => video.value ? (bestThumbnail(video.value)?.url || null) : null)
 
-const playback = computed(() => {
-  if (isOffline.value) return { offlineVideoId: route.params.id, src: null }
-  if (stream.value) return { offlineVideoId: null, src: stream.value.url }
-  return { offlineVideoId: null, src: null }
-})
-
 async function load(id) {
   loading.value = true
   error.value = null
@@ -41,16 +35,10 @@ async function load(id) {
   
   try {
     video.value = await api.video(id)
-    
-    // Fetch some related/up-next videos using search
     try {
       const related = await api.search(video.value.title || 'trending', 'video')
       upNext.value = related.filter(v => v.videoId !== id).slice(0, 8)
-    } catch (err) {
-      console.warn('Failed to load Up Next sidebar', err)
-      // We do not throw here, so the video still plays even if related videos fail
-    }
-
+    } catch (err) {}
   } catch (e) {
     error.value = String(e.message || e)
     const local = await db.videos.get(id)
@@ -82,6 +70,10 @@ async function loadComments() {
 
 onMounted(() => load(route.params.id))
 watch(() => route.params.id, (id) => { if (id) load(id) })
+
+const handleImageError = (e) => {
+  e.target.src = 'https://placehold.co/400x225/1f1f1f/aaaaaa?text=No+Thumbnail'
+}
 </script>
 
 <template>
@@ -98,7 +90,6 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
             :video-id="isOffline ? null : route.params.id"
             :offline-video-id="isOffline ? route.params.id : null"
             :poster="poster"
-            :has-stream="!!stream"
           />
         </div>
 
@@ -125,7 +116,7 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
             <div class="flex items-center bg-surface rounded-full overflow-hidden border border-white/10">
               <button class="flex items-center gap-2 px-4 py-1.5 hover:bg-surface-2 transition-colors border-r border-white/10">
                 <svg viewBox="0 0 24 24" class="w-5 h-5 fill-current"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></svg>
-                45K
+                Like
               </button>
               <button class="px-4 py-1.5 hover:bg-surface-2 transition-colors">
                 <svg viewBox="0 0 24 24" class="w-5 h-5 fill-current"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></svg>
@@ -183,7 +174,12 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
       <div class="space-y-3">
         <RouterLink v-for="v in upNext" :key="v.videoId" :to="`/watch/${v.videoId}`" class="flex gap-2 group">
           <div class="relative w-40 aspect-video bg-surface rounded-lg overflow-hidden shrink-0">
-            <img v-if="bestThumbnail(v)" :src="bestThumbnail(v).url" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+            <img 
+              v-if="bestThumbnail(v)" 
+              :src="bestThumbnail(v).url" 
+              @error="handleImageError" 
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+            />
             <span v-if="v.lengthSeconds" class="absolute bottom-1 right-1 bg-black/80 text-[11px] px-1 rounded">{{ formatDuration(v.lengthSeconds) }}</span>
           </div>
           <div class="flex-1 min-w-0">
