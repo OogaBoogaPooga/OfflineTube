@@ -16,6 +16,7 @@ function normalizeInvidiousVideo(v) {
     title: v.title || 'Untitled',
     author: v.author || 'Unknown',
     authorId: v.authorId || '',
+    authorAvatar: v.authorThumbnails?.[0]?.url || null, // Added Avatar
     lengthSeconds: v.lengthSeconds || 0,
     videoThumbnails: getThumbnail(v.videoId)
   };
@@ -28,6 +29,7 @@ function normalizePipedVideo(v) {
     title: v.title || 'Untitled',
     author: v.uploaderName || v.uploader || 'Unknown',
     authorId: v.uploaderUrl ? v.uploaderUrl.replace('/channel/', '') : '',
+    authorAvatar: v.uploaderAvatar || null, // Added Avatar
     lengthSeconds: v.duration || 0,
     videoThumbnails: getThumbnail(id)
   };
@@ -61,7 +63,11 @@ export const api = {
     
     const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
     const results = await yt.search('trending', { type: 'video' });
-    return results.videos.map(v => ({ videoId: v.id, title: v.title?.toString() || '', author: v.author?.name || '', authorId: v.author?.id || '', lengthSeconds: v.duration?.seconds || 0, videoThumbnails: getThumbnail(v.id) }));
+    return results.videos.map(v => ({ 
+      videoId: v.id, title: v.title?.toString() || '', author: v.author?.name || '', 
+      authorId: v.author?.id || '', authorAvatar: v.author?.thumbnails?.[0]?.url || null, 
+      lengthSeconds: v.duration?.seconds || 0, videoThumbnails: getThumbnail(v.id) 
+    }));
   },
 
   search: async (q, type = 'video') => {
@@ -70,28 +76,55 @@ export const api = {
     
     const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
     const results = await yt.search(q, { type });
-    return (results.videos || []).map(v => ({ videoId: v.id, title: v.title?.toString() || '', author: v.author?.name || '', authorId: v.author?.id || '', lengthSeconds: v.duration?.seconds || 0, videoThumbnails: getThumbnail(v.id) }));
+    return (results.videos || []).map(v => ({ 
+      videoId: v.id, title: v.title?.toString() || '', author: v.author?.name || '', 
+      authorId: v.author?.id || '', authorAvatar: v.author?.thumbnails?.[0]?.url || null, 
+      lengthSeconds: v.duration?.seconds || 0, videoThumbnails: getThumbnail(v.id) 
+    }));
   },
 
   video: async (id) => {
     try {
       const data = await fetchFromInvidious(`/api/v1/videos/${id}`);
-      return { videoId: id, title: data.title, author: data.author, authorId: data.authorId, lengthSeconds: data.lengthSeconds, description: data.description, videoThumbnails: getThumbnail(id), formatStreams: data.formatStreams || [] };
+      return { 
+        videoId: id, title: data.title, author: data.author, authorId: data.authorId, 
+        authorAvatar: data.authorThumbnails?.[0]?.url || null,
+        lengthSeconds: data.lengthSeconds, description: data.description, 
+        videoThumbnails: getThumbnail(id), formatStreams: data.formatStreams || [] 
+      };
     } catch (e) {}
 
     try {
       const data = await fetchFromPiped(`/streams/${id}`);
-      const best = data.videoStreams?.find(s => !s.videoOnly) || data.videoStreams?.[0];
-      return { videoId: id, title: data.title, author: data.uploader, authorId: data.uploaderUrl?.replace('/channel/', ''), lengthSeconds: data.duration, description: data.description, videoThumbnails: getThumbnail(id), formatStreams: best ? [{ url: best.url, qualityLabel: best.quality, container: 'mp4', type: 'video/mp4' }] : [] };
+      // Get ALL muxed streams for download options
+      const formats = (data.videoStreams || [])
+        .filter(s => !s.videoOnly && s.url)
+        .map(s => ({ url: s.url, qualityLabel: s.quality, container: 'mp4', type: 'video/mp4' }));
+        
+      return { 
+        videoId: id, title: data.title, author: data.uploader, authorId: data.uploaderUrl?.replace('/channel/', ''), 
+        authorAvatar: data.uploaderAvatar || null,
+        lengthSeconds: data.duration, description: data.description, 
+        videoThumbnails: getThumbnail(id), formatStreams: formats 
+      };
     } catch (e) {}
 
     try {
       const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
       const info = await yt.getInfo(id);
-      const formats = (info.streaming_data?.formats || []).map(f => ({ url: f.url || f.decipher?.(yt.session.player) || '', qualityLabel: f.quality_label, container: f.container, type: 'video/mp4' })).filter(f => f.url);
-      return { videoId: id, title: info.basic_info.title, author: info.basic_info.author, authorId: info.basic_info.channel_id, lengthSeconds: info.basic_info.duration, description: info.basic_info.short_description, videoThumbnails: getThumbnail(id), formatStreams: formats };
+      const formats = (info.streaming_data?.formats || []).map(f => ({ 
+        url: f.url || f.decipher?.(yt.session.player) || '', 
+        qualityLabel: f.quality_label, container: f.container, type: 'video/mp4' 
+      })).filter(f => f.url);
+      
+      return { 
+        videoId: id, title: info.basic_info.title, author: info.basic_info.author, authorId: info.basic_info.channel_id, 
+        authorAvatar: info.basic_info.author?.thumbnails?.[0]?.url || null,
+        lengthSeconds: info.basic_info.duration, description: info.basic_info.short_description, 
+        videoThumbnails: getThumbnail(id), formatStreams: formats 
+      };
     } catch (e) {
-      return { videoId: id, title: 'Video', author: 'Unknown', authorId: '', lengthSeconds: 0, description: '', videoThumbnails: getThumbnail(id), formatStreams: [] };
+      return { videoId: id, title: 'Video', author: 'Unknown', authorId: '', authorAvatar: null, lengthSeconds: 0, description: '', videoThumbnails: getThumbnail(id), formatStreams: [] };
     }
   },
 
@@ -100,13 +133,10 @@ export const api = {
       const data = await fetchFromInvidious(`/api/v1/comments/${id}`);
       return (data.comments || []).map(c => ({ commentId: c.commentId, author: c.author, content: c.content }));
     } catch (e) {}
-    
     try {
       const data = await fetchFromPiped(`/comments/${id}`);
       return (data.comments || []).map(c => ({ commentId: c.id, author: c.author, content: c.commentText }));
-    } catch (e) {
-      return [];
-    }
+    } catch (e) { return []; }
   }
 };
 
