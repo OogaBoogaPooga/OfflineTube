@@ -44,14 +44,9 @@ async function load(id) {
     const local = await db.videos.get(id)
     if (local) {
       video.value = {
-        videoId: local.id,
-        title: local.title,
-        author: local.author,
-        authorId: local.authorId,
-        lengthSeconds: local.lengthSeconds,
-        description: '',
-        videoThumbnails: local.thumbnail ? [{ url: local.thumbnail }] : [],
-        formatStreams: []
+        videoId: local.id, title: local.title, author: local.author, authorId: local.authorId,
+        authorAvatar: null, lengthSeconds: local.lengthSeconds, description: '',
+        videoThumbnails: local.thumbnail ? [{ url: local.thumbnail }] : [], formatStreams: []
       }
       error.value = null
     }
@@ -73,6 +68,9 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
 
 const handleImageError = (e) => {
   e.target.src = 'https://placehold.co/400x225/1f1f1f/aaaaaa?text=No+Thumbnail'
+}
+const handleAvatarError = (e) => {
+  e.target.src = `https://ui-avatars.com/api/?name=${video.value?.author?.charAt(0)}&background=282828&color=fff`
 }
 </script>
 
@@ -99,8 +97,9 @@ const handleImageError = (e) => {
         <div class="flex flex-wrap items-center justify-between gap-4 mt-3 border-b border-white/10 pb-4">
           <!-- Channel Info -->
           <div class="flex items-center gap-3">
-            <RouterLink :to="`/channel/${video.authorId}`" class="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center text-lg font-bold text-muted shrink-0">
-              {{ video.author?.charAt(0) || '?' }}
+            <RouterLink :to="`/channel/${video.authorId}`" class="w-11 h-11 rounded-full bg-surface-2 flex items-center justify-center text-lg font-bold text-muted shrink-0 overflow-hidden">
+              <img v-if="video.authorAvatar" :src="video.authorAvatar" @error="handleAvatarError" class="w-full h-full object-cover" />
+              <span v-else>{{ video.author?.charAt(0) || '?' }}</span>
             </RouterLink>
             <div>
               <RouterLink :to="`/channel/${video.authorId}`" class="font-bold hover:text-white block">{{ video.author }}</RouterLink>
