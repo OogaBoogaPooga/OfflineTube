@@ -9,6 +9,10 @@ const props = defineProps({
 const thumb = computed(() => bestThumbnail(props.video))
 const duration = computed(() => props.video.lengthSeconds ? formatDuration(props.video.lengthSeconds) : null)
 const authorName = computed(() => props.video.author || props.video.authorName || '')
+
+const handleImageError = (e) => {
+  e.target.src = 'https://placehold.co/400x225/1f1f1f/aaaaaa?text=No+Thumbnail'
+}
 </script>
 
 <template>
@@ -18,6 +22,7 @@ const authorName = computed(() => props.video.author || props.video.authorName |
         v-if="thumb"
         :src="thumb.url"
         :alt="video.title"
+        @error="handleImageError"
         loading="lazy"
         class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
       />
