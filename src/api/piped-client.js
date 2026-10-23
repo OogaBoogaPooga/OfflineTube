@@ -1,155 +1,98 @@
 // src/api/piped-client.js
-import { Innertube, ClientType } from 'youtubei.js';
 
-// YOUR CLOUDFLARE WORKER URL
-const CORS_PROXY_URL = 'https://offline-tube-cors-proxy.logan-storrs.workers.dev';
+const WORKER_URL = 'https://offline-tube-cors-proxy.logan-storrs.workers.dev';
+const PIPED_API = 'https://pipedapi.kavin.rocks';
 
-function getProxyFetch() {
-  return async (input, init = {}) => {
-    const url = typeof input === 'string' ? input : (input?.url || input?.href);
-    
-    if (!url || url === 'undefined') {
-      return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }
-
-    const proxyUrl = `${CORS_PROXY_URL}?url=${encodeURIComponent(url)}`;
-    
-    const options = { ...init };
-    
-    // 1. Strip body for GET/HEAD
-    if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
-      delete options.body;
-    }
-
-    // 2. Prevent credentials from being sent, bypassing CORS credential requirements
-    options.credentials = 'omit';
-
-    const response = await fetch(proxyUrl, options);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Worker Error] ${response.status} on URL: ${url}`, errorText);
-      throw new Error(`Worker proxy failed with status ${response.status}`);
-    }
-    
-    return response;
-  };
+// Helper to proxy requests through your Cloudflare Worker
+async function fetchProxy(url) {
+  const proxyUrl = `${WORKER_URL}?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
+  return res.json();
 }
 
 function getThumbnail(videoId) {
   return [{ url: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` }];
 }
 
-function mapYTNode(v) {
+function mapPipedVideo(v) {
+  const id = v.url ? v.url.replace('/watch?v=', '') : v.videoId;
   return {
-    videoId: v.id,
-    title: v.title?.toString() || 'Untitled',
-    author: v.author?.name || 'Unknown',
-    authorId: v.author?.id || '',
-    authorAvatar: v.author?.thumbnails?.[0]?.url || `https://ui-avatars.com/api/?name=${v.author?.name?.charAt(0)}&background=282828&color=fff`,
-    lengthSeconds: v.duration?.seconds || 0,
-    videoThumbnails: getThumbnail(v.id)
+    videoId: id,
+    title: v.title || 'Untitled',
+    author: v.uploaderName || v.uploader || 'Unknown',
+    authorId: v.uploaderUrl ? v.uploaderUrl.replace('/channel/', '') : '',
+    authorAvatar: v.uploaderAvatar || null,
+    lengthSeconds: v.duration || 0,
+    videoThumbnails: getThumbnail(id)
   };
 }
 
 export const api = {
-  popular: async (page = 1) => {
+  popular: async () => {
     try {
-      const yt = await Innertube.create({ 
-        client_type: ClientType.TV_EMBEDDED, 
-        retrieve_player: false,
-        generate_session_locally: true,
-        fetch: getProxyFetch()
-      });
-      
-      if (page === 1) {
-        try {
-          const feed = await yt.getHomeFeed();
-          if (feed.videos && feed.videos.length > 0) return feed.videos.map(mapYTNode);
-        } catch (e) {
-          console.warn('Home feed failed, falling back to search:', e);
-        }
+      const data = await fetchProxy(`${PIPED_API}/trending?region=US`);
+      // Piped returns an array directly
+      if (Array.isArray(data)) {
+        return data.map(mapPipedVideo);
       }
-      
-      const queries = ['trending videos', 'popular tech', 'gaming highlights', 'news today', 'top documentaries'];
-      const query = queries[(page - 1) % queries.length];
-      const results = await yt.search(query, { type: 'video' });
-      return results.videos.map(mapYTNode);
+      return [];
     } catch (e) {
-      console.error('Popular fetch completely failed:', e);
+      console.error('Home feed failed:', e);
       return [];
     }
   },
 
   search: async (q, type = 'video') => {
     try {
-      const yt = await Innertube.create({ 
-        client_type: ClientType.TV_EMBEDDED, 
-        retrieve_player: false,
-        generate_session_locally: true,
-        fetch: getProxyFetch()
-      });
-      const results = await yt.search(q, { type });
-      return (results.videos || []).map(mapYTNode);
+      const filter = type === 'video' ? 'videos' : 'channels';
+      const data = await fetchProxy(`${PIPED_API}/search?q=${encodeURIComponent(q)}&filter=${filter}`);
+      return (data.items || []).map(mapPipedVideo);
     } catch (e) { return []; }
   },
 
   channel: async (id) => {
     try {
-      const yt = await Innertube.create({ 
-        client_type: ClientType.TV_EMBEDDED, 
-        retrieve_player: false,
-        generate_session_locally: true,
-        fetch: getProxyFetch()
-      });
-      const channel = await yt.getChannel(id);
-      const videos = await channel.videos.next();
+      const data = await fetchProxy(`${PIPED_API}/channel/${id}`);
       return {
-        author: channel.header.author.name,
+        author: data.name,
         authorId: id,
-        authorThumbnails: channel.header.author.thumbnails || [],
-        subCount: channel.header.subscriber_count?.text || 'Unknown',
-        description: channel.metadata.description || '',
-        latestVideos: videos.videos.map(mapYTNode)
+        authorThumbnails: data.avatarUrl ? [{ url: data.avatarUrl }] : [],
+        subCount: data.subscriberCount || '0',
+        description: data.description || '',
+        latestVideos: (data.relatedStreams || []).map(mapPipedVideo)
       };
     } catch (e) { 
-      return { author: 'Unknown Channel', authorId: id, authorThumbnails: [], subCount: '0', description: '', latestVideos: [] }; 
+      return { author: 'Unknown', authorId: id, authorThumbnails: [], subCount: '0', description: '', latestVideos: [] }; 
     }
   },
 
   video: async (id) => {
     try {
-      const yt = await Innertube.create({ 
-        client_type: ClientType.TV_EMBEDDED, 
-        retrieve_player: false,
-        generate_session_locally: true,
-        fetch: getProxyFetch()
-      });
-      const info = await yt.getInfo(id);
+      const data = await fetchProxy(`${PIPED_API}/streams/${id}`);
       
-      const formats = (info.streaming_data?.formats || [])
-        .filter(f => f.url)
-        .map(f => ({ 
-          url: f.url, 
-          qualityLabel: f.quality_label, 
-          contentLength: f.content_length, 
-          container: f.container, 
+      const formats = (data.videoStreams || [])
+        .filter(s => !s.videoOnly && s.url)
+        .map(s => ({ 
+          url: s.url, 
+          qualityLabel: s.quality, 
+          contentLength: s.contentLength, 
+          container: 'mp4', 
           type: 'video/mp4' 
         }));
         
-      const related = (info.watch_next_feed || [])
-        .filter(v => v.type === 'CompactVideo')
-        .map(v => mapYTNode(v))
+      const related = (data.relatedStreams || [])
+        .map(mapPipedVideo)
         .slice(0, 10);
 
       return { 
         videoId: id, 
-        title: info.basic_info.title, 
-        author: info.basic_info.author, 
-        authorId: info.basic_info.channel_id, 
-        authorAvatar: info.basic_info.author?.thumbnails?.[0]?.url || `https://ui-avatars.com/api/?name=${info.basic_info.author?.charAt(0)}&background=282828&color=fff`, 
-        lengthSeconds: info.basic_info.duration, 
-        description: info.basic_info.short_description, 
+        title: data.title, 
+        author: data.uploader, 
+        authorId: data.uploaderUrl?.replace('/channel/', ''), 
+        authorAvatar: data.uploaderAvatar || null, 
+        lengthSeconds: data.duration, 
+        description: data.description, 
         videoThumbnails: getThumbnail(id), 
         formatStreams: formats,
         related
@@ -162,14 +105,8 @@ export const api = {
 
   comments: async (id) => {
     try {
-      const yt = await Innertube.create({ 
-        client_type: ClientType.TV_EMBEDDED, 
-        retrieve_player: false,
-        generate_session_locally: true,
-        fetch: getProxyFetch()
-      });
-      const comments = await yt.getComments(id);
-      return comments.contents.map(c => ({ commentId: c.comment_id, author: c.author.name, content: c.content.toString() }));
+      const data = await fetchProxy(`${PIPED_API}/comments/${id}`);
+      return (data.comments || []).map(c => ({ commentId: c.id, author: c.author, content: c.commentText }));
     } catch (e) { return []; }
   }
 };
