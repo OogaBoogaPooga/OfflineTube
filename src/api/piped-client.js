@@ -1,14 +1,35 @@
 // src/api/piped-client.js
 
 const WORKER_URL = 'https://offline-tube-cors-proxy.logan-storrs.workers.dev';
-const PIPED_API = 'https://pipedapi.kavin.rocks';
 
-// Helper to proxy requests through your Cloudflare Worker
-async function fetchProxy(url) {
-  const proxyUrl = `${WORKER_URL}?url=${encodeURIComponent(url)}`;
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
-  return res.json();
+// A list of instances to try in order
+const PIPED_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.nosebs.ru',
+  'https://pipedapi-libre.kavin.rocks',
+  'https://api.piped.private.coffee'
+];
+
+// Helper to fetch from the first working instance
+async function fetchProxy(path) {
+  let lastError;
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const targetUrl = `${instance}${path}`;
+      const proxyUrl = `${WORKER_URL}?url=${encodeURIComponent(targetUrl)}`;
+      const res = await fetch(proxyUrl);
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
+      const data = await res.json();
+      return data; // Success! Exit the loop and return data
+      
+    } catch (e) {
+      lastError = e;
+      console.warn(`Instance ${instance} failed, trying next...`);
+    }
+  }
+  throw new Error(`All instances failed: ${lastError.message}`);
 }
 
 function getThumbnail(videoId) {
@@ -31,8 +52,7 @@ function mapPipedVideo(v) {
 export const api = {
   popular: async () => {
     try {
-      const data = await fetchProxy(`${PIPED_API}/trending?region=US`);
-      // Piped returns an array directly
+      const data = await fetchProxy('/trending?region=US');
       if (Array.isArray(data)) {
         return data.map(mapPipedVideo);
       }
@@ -46,14 +66,14 @@ export const api = {
   search: async (q, type = 'video') => {
     try {
       const filter = type === 'video' ? 'videos' : 'channels';
-      const data = await fetchProxy(`${PIPED_API}/search?q=${encodeURIComponent(q)}&filter=${filter}`);
+      const data = await fetchProxy(`/search?q=${encodeURIComponent(q)}&filter=${filter}`);
       return (data.items || []).map(mapPipedVideo);
     } catch (e) { return []; }
   },
 
   channel: async (id) => {
     try {
-      const data = await fetchProxy(`${PIPED_API}/channel/${id}`);
+      const data = await fetchProxy(`/channel/${id}`);
       return {
         author: data.name,
         authorId: id,
@@ -69,7 +89,7 @@ export const api = {
 
   video: async (id) => {
     try {
-      const data = await fetchProxy(`${PIPED_API}/streams/${id}`);
+      const data = await fetchProxy(`/streams/${id}`);
       
       const formats = (data.videoStreams || [])
         .filter(s => !s.videoOnly && s.url)
@@ -105,7 +125,7 @@ export const api = {
 
   comments: async (id) => {
     try {
-      const data = await fetchProxy(`${PIPED_API}/comments/${id}`);
+      const data = await fetchProxy(`/comments/${id}`);
       return (data.comments || []).map(c => ({ commentId: c.id, author: c.author, content: c.commentText }));
     } catch (e) { return []; }
   }
