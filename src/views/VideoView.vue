@@ -66,36 +66,24 @@ async function loadComments() {
 onMounted(() => load(route.params.id))
 watch(() => route.params.id, (id) => { if (id) load(id) })
 
-const handleImageError = (e) => {
-  e.target.src = 'https://placehold.co/400x225/1f1f1f/aaaaaa?text=No+Thumbnail'
-}
-const handleAvatarError = (e) => {
-  e.target.src = `https://ui-avatars.com/api/?name=${video.value?.author?.charAt(0)}&background=282828&color=fff`
-}
+const handleImageError = (e) => { e.target.src = 'https://placehold.co/400x225/1f1f1f/aaaaaa?text=No+Thumbnail' }
+const handleAvatarError = (e) => { e.target.src = `https://ui-avatars.com/api/?name=${video.value?.author?.charAt(0)}&background=282828&color=fff` }
 </script>
 
 <template>
   <div class="max-w-[1800px] mx-auto px-4 py-4 flex gap-6">
-    <!-- Left Column: Video Player & Info -->
     <div class="flex-1 min-w-0">
       <div v-if="loading" class="text-muted text-sm py-12 text-center">Loading…</div>
       <div v-else-if="error && !video" class="text-red-400 text-sm py-12 text-center">{{ error }}</div>
 
       <div v-else-if="video">
-        <!-- Player -->
         <div class="aspect-video bg-black rounded-xl overflow-hidden shadow-lg">
-          <Player
-            :video-id="isOffline ? null : route.params.id"
-            :offline-video-id="isOffline ? route.params.id : null"
-            :poster="poster"
-          />
+          <Player :video-id="isOffline ? null : route.params.id" :offline-video-id="isOffline ? route.params.id : null" :poster="poster" />
         </div>
 
-        <!-- Title & Actions -->
         <h1 class="text-xl font-bold mt-3">{{ video.title }}</h1>
         
         <div class="flex flex-wrap items-center justify-between gap-4 mt-3 border-b border-white/10 pb-4">
-          <!-- Channel Info -->
           <div class="flex items-center gap-3">
             <RouterLink :to="`/channel/${video.authorId}`" class="w-11 h-11 rounded-full bg-surface-2 flex items-center justify-center text-lg font-bold text-muted shrink-0 overflow-hidden">
               <img v-if="video.authorAvatar" :src="video.authorAvatar" @error="handleAvatarError" class="w-full h-full object-cover" />
@@ -103,14 +91,13 @@ const handleAvatarError = (e) => {
             </RouterLink>
             <div>
               <RouterLink :to="`/channel/${video.authorId}`" class="font-bold hover:text-white block">{{ video.author }}</RouterLink>
-              <span class="text-xs text-muted">Subscribers</span>
+              <span class="text-xs text-muted">Visit Channel</span>
             </div>
             <button class="ml-2 px-4 py-1.5 rounded-full bg-accent hover:bg-red-700 text-white text-sm font-medium transition-colors">
               Subscribe
             </button>
           </div>
 
-          <!-- Action Buttons -->
           <div class="flex items-center gap-2">
             <div class="flex items-center bg-surface rounded-full overflow-hidden border border-white/10">
               <button class="flex items-center gap-2 px-4 py-1.5 hover:bg-surface-2 transition-colors border-r border-white/10">
@@ -127,33 +114,26 @@ const handleAvatarError = (e) => {
               Share
             </button>
 
-            <button
-              v-if="!isOffline && video.formatStreams?.length"
-              @click="showModal = true"
-              class="flex items-center gap-2 bg-surface hover:bg-surface-2 px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
-            >
+            <button v-if="!isOffline && video.formatStreams?.length" @click="showModal = true" class="flex items-center gap-2 bg-surface hover:bg-surface-2 px-4 py-1.5 rounded-full text-sm font-medium transition-colors">
               <svg viewBox="0 0 24 24" class="w-5 h-5 fill-current"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
               Download
             </button>
           </div>
         </div>
 
-        <!-- Description -->
         <div class="mt-4 bg-surface rounded-xl p-4 text-sm cursor-pointer hover:bg-surface-2 transition-colors" @click="isExpanded = !isExpanded">
           <div class="font-bold text-xs text-muted mb-1">
-            {{ formatBytes(video.lengthSeconds ? video.lengthSeconds * 150000 : 0) }} · Streamed on {{ new Date().toLocaleDateString() }}
+            {{ video.lengthSeconds ? formatDuration(video.lengthSeconds) : 'Unknown length' }} · Streamed on {{ new Date().toLocaleDateString() }}
           </div>
           <div :class="isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'">
             {{ video.description || 'No description provided.' }}
           </div>
         </div>
 
-        <!-- Comments Button -->
         <button @click="loadComments" class="mt-6 font-bold text-sm text-accent hover:text-red-400">
           {{ showComments ? 'Hide comments' : 'Show comments' }}
         </button>
 
-        <!-- Comments List -->
         <div v-if="showComments" class="mt-4 space-y-4">
           <div v-if="!comments.length" class="text-muted text-sm">No comments.</div>
           <div v-for="c in comments" :key="c.commentId" class="flex gap-3">
@@ -167,18 +147,12 @@ const handleAvatarError = (e) => {
       </div>
     </div>
 
-    <!-- Right Column: Up Next Sidebar -->
     <div class="w-96 shrink-0 hidden lg:block">
       <h2 class="font-bold text-lg mb-4">Up Next</h2>
       <div class="space-y-3">
         <RouterLink v-for="v in upNext" :key="v.videoId" :to="`/watch/${v.videoId}`" class="flex gap-2 group">
           <div class="relative w-40 aspect-video bg-surface rounded-lg overflow-hidden shrink-0">
-            <img 
-              v-if="bestThumbnail(v)" 
-              :src="bestThumbnail(v).url" 
-              @error="handleImageError" 
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-            />
+            <img v-if="bestThumbnail(v)" :src="bestThumbnail(v).url" @error="handleImageError" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
             <span v-if="v.lengthSeconds" class="absolute bottom-1 right-1 bg-black/80 text-[11px] px-1 rounded">{{ formatDuration(v.lengthSeconds) }}</span>
           </div>
           <div class="flex-1 min-w-0">
