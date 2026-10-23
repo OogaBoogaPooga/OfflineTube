@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated } from 'vue'
 import { api } from '../api/piped-client'
 import VideoCard from '../components/VideoCard.vue'
 
@@ -12,14 +12,15 @@ async function load(isMore = false) {
   if (!isMore) {
     loading.value = true
     videos.value = []
+    page.value = 1
+  } else {
+    page.value++
   }
   error.value = null
   
   try {
-    // We fetch the popular list, but to get "more" we could fetch a different search term or just re-fetch
-    const data = await api.popular()
+    const data = await api.popular(page.value)
     if (isMore) {
-      // Append new videos, filtering out duplicates
       const existingIds = new Set(videos.value.map(v => v.videoId))
       const newVideos = data.filter(v => !existingIds.has(v.videoId))
       videos.value = [...videos.value, ...newVideos]
@@ -33,14 +34,22 @@ async function load(isMore = false) {
   }
 }
 
+// Force a fresh rotation every time the user navigates to Home
 onMounted(() => load())
+onActivated(() => load())
 </script>
 
 <template>
   <div class="max-w-[1600px] mx-auto">
-    <div class="flex items-center gap-2 mb-6 border-b border-white/10 pb-2">
-      <svg viewBox="0 0 24 24" class="w-6 h-6 fill-accent"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-      <h1 class="text-xl font-bold tracking-wide">Trending</h1>
+    <div class="flex items-center justify-between gap-2 mb-6 border-b border-white/10 pb-2">
+      <div class="flex items-center gap-2">
+        <svg viewBox="0 0 24 24" class="w-6 h-6 fill-accent"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <h1 class="text-xl font-bold tracking-wide">Trending</h1>
+      </div>
+      <button @click="load()" class="text-xs text-muted hover:text-white flex items-center gap-1 transition-colors">
+        <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        Refresh Feed
+      </button>
     </div>
 
     <div v-if="loading && !videos.length" class="text-muted text-sm py-8 text-center">Loading…</div>
