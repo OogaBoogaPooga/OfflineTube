@@ -85,15 +85,27 @@ export const api = {
       return { videoId: id, title: data.title, author: data.uploader, authorId: data.uploaderUrl?.replace('/channel/', ''), lengthSeconds: data.duration, description: data.description, videoThumbnails: getThumbnail(id), formatStreams: best ? [{ url: best.url, qualityLabel: best.quality, container: 'mp4', type: 'video/mp4' }] : [] };
     } catch (e) {}
 
-    // Fallback to youtubei.js via proxy
     try {
       const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
       const info = await yt.getInfo(id);
       const formats = (info.streaming_data?.formats || []).map(f => ({ url: f.url || f.decipher?.(yt.session.player) || '', qualityLabel: f.quality_label, container: f.container, type: 'video/mp4' })).filter(f => f.url);
       return { videoId: id, title: info.basic_info.title, author: info.basic_info.author, authorId: info.basic_info.channel_id, lengthSeconds: info.basic_info.duration, description: info.basic_info.short_description, videoThumbnails: getThumbnail(id), formatStreams: formats };
     } catch (e) {
-      // If absolutely everything fails, return the bare minimum with the correct ID
       return { videoId: id, title: 'Video', author: 'Unknown', authorId: '', lengthSeconds: 0, description: '', videoThumbnails: getThumbnail(id), formatStreams: [] };
+    }
+  },
+
+  comments: async (id) => {
+    try {
+      const data = await fetchFromInvidious(`/api/v1/comments/${id}`);
+      return (data.comments || []).map(c => ({ commentId: c.commentId, author: c.author, content: c.content }));
+    } catch (e) {}
+    
+    try {
+      const data = await fetchFromPiped(`/comments/${id}`);
+      return (data.comments || []).map(c => ({ commentId: c.id, author: c.author, content: c.commentText }));
+    } catch (e) {
+      return [];
     }
   }
 };
