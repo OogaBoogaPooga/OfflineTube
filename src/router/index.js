@@ -9,6 +9,11 @@ const routes = [
   { path: '/downloads', name: 'downloads', component: () => import('../views/DownloadsView.vue') },
   { path: '/library',   name: 'library',   component: () => import('../views/LibraryView.vue') },
   { path: '/settings',  name: 'settings',  component: () => import('../views/SettingsView.vue') },
+  // Placeholder routes for OAuth-required pages
+  { path: '/subscriptions', component: () => import('../views/PlaceholderView.vue'), props: { title: 'Subscriptions' } },
+  { path: '/channels',      component: () => import('../views/PlaceholderView.vue'), props: { title: 'Channels' } },
+  { path: '/playlists',     component: () => import('../views/PlaceholderView.vue'), props: { title: 'Playlists' } },
+  { path: '/history',       component: () => import('../views/PlaceholderView.vue'), props: { title: 'History' } },
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
 
