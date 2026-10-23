@@ -3,12 +3,12 @@ import { Innertube } from 'youtubei.js';
 
 const BACKEND_PROXY = '/api/proxy';
 
+// Only 1 public instance has CORS + API enabled right now
 const INVIDIOUS_INSTANCES = [
-  'https://inv.thepixora.com',
-  'https://invidious.f5.si',
-  'https://yewtu.be'
+  'https://invidious.f5.si'
 ];
 
+// Piped instances as a backup (some public Piped instances still work)
 const PIPED_INSTANCES = [
   'https://pipedapi.kavin.rocks',
   'https://api.piped.private.coffee',
@@ -83,6 +83,7 @@ async function fetchFromPiped(endpoint) {
 export const api = {
   popular: async () => {
     try {
+      // Use the newly verified instance for trending
       const data = await fetchFromInvidious('/api/v1/popular');
       return data.map(normalizeInvidiousVideo);
     } catch (e) { console.warn('Invidious popular failed, trying Piped...'); }
