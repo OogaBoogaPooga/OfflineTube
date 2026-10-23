@@ -1,129 +1,109 @@
 // src/api/piped-client.js
-import { Innertube } from 'youtubei.js';
+import { Innertube, ClientType } from 'youtubei.js';
 
 const BACKEND_PROXY = '/api/proxy';
-const INVIDIOUS_INSTANCES = ['https://invidious.f5.si', 'https://inv.thepixora.com'];
-const PIPED_INSTANCES = ['https://api.piped.private.coffee', 'https://pipedapi.leptons.xyz', 'https://pipedapi.nosebs.ru'];
-
-const CATEGORIES = ['trending', 'popular music', 'gaming', 'tech reviews', 'news', 'movies', 'sports highlights', 'comedy', 'documentary'];
 
 function getThumbnail(videoId) {
   return [{ url: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` }];
 }
 
-function normalizeInvidiousVideo(v) {
+function mapYTNode(v) {
   return {
-    videoId: v.videoId, title: v.title || 'Untitled', author: v.author || 'Unknown', authorId: v.authorId || '',
-    authorAvatar: v.authorThumbnails?.[0]?.url || null, lengthSeconds: v.lengthSeconds || 0, videoThumbnails: getThumbnail(v.videoId)
+    videoId: v.id,
+    title: v.title?.toString() || 'Untitled',
+    author: v.author?.name || 'Unknown',
+    authorId: v.author?.id || '',
+    authorAvatar: v.author?.thumbnails?.[0]?.url || `https://ui-avatars.com/api/?name=${v.author?.name?.charAt(0)}&background=282828&color=fff`,
+    lengthSeconds: v.duration?.seconds || 0,
+    videoThumbnails: getThumbnail(v.id)
   };
-}
-
-function normalizePipedVideo(v) {
-  const id = v.url ? v.url.replace('/watch?v=', '') : v.videoId;
-  return {
-    videoId: id, title: v.title || 'Untitled', author: v.uploaderName || v.uploader || 'Unknown', authorId: v.uploaderUrl ? v.uploaderUrl.replace('/channel/', '') : '',
-    authorAvatar: v.uploaderAvatar || null, lengthSeconds: v.duration || 0, videoThumbnails: getThumbnail(id)
-  };
-}
-
-async function fetchFromInvidious(endpoint) {
-  for (const instance of INVIDIOUS_INSTANCES) {
-    try { const res = await fetch(`${instance}${endpoint}`); if (res.ok) return await res.json(); } catch (e) {}
-  }
-  throw new Error('Invidious failed');
-}
-
-async function fetchFromPiped(endpoint) {
-  for (const instance of PIPED_INSTANCES) {
-    try {
-      const proxyUrl = `${BACKEND_PROXY}?url=${encodeURIComponent(instance + endpoint)}`;
-      const res = await fetch(proxyUrl); if (res.ok) return await res.json();
-    } catch (e) {}
-  }
-  throw new Error('Piped failed');
 }
 
 export const api = {
-  popular: async (page = 1) => {
-    // Pick a different category based on the page number to ensure new videos
-    const query = CATEGORIES[(page - 1) % CATEGORIES.length];
-    
-    try { 
-      const data = await fetchFromInvidious(`/api/v1/search?q=${encodeURIComponent(query)}&type=video`);
-      if (data.length > 0) return data.map(normalizeInvidiousVideo); 
+  popular: async () => {
+    // 1. Try to get the standard YouTube Home Feed
+    try {
+      const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
+      const feed = await yt.getHomeFeed();
+      if (feed.videos && feed.videos.length > 0) {
+        return feed.videos.map(mapYTNode);
+      }
+    } catch (e) { console.warn('Home feed failed, trying search...'); }
+
+    // 2. Fallback to a general search if the home feed fails
+    try {
+      const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
+      const results = await yt.search('trending', { type: 'video' });
+      return results.videos.map(mapYTNode);
     } catch (e) {}
-    
-    try { 
-      const data = await fetchFromPiped(`/search?q=${encodeURIComponent(query)}&filter=videos`);
-      if (data.items && data.items.length > 0) return data.items.map(normalizePipedVideo); 
-    } catch (e) {}
-    
-    // Fallback to youtubei.js
-    const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
-    const results = await yt.search(query, { type: 'video' });
-    return results.videos.map(v => ({ 
-      videoId: v.id, title: v.title?.toString() || '', author: v.author?.name || '', 
-      authorId: v.author?.id || '', authorAvatar: v.author?.thumbnails?.[0]?.url || `https://ui-avatars.com/api/?name=${v.author?.name?.charAt(0)}&background=282828&color=fff`, 
-      lengthSeconds: v.duration?.seconds || 0, videoThumbnails: getThumbnail(v.id) 
-    }));
+
+    return [];
   },
 
   search: async (q, type = 'video') => {
-    try { return (await fetchFromInvidious(`/api/v1/search?q=${encodeURIComponent(q)}&type=${type}`)).map(normalizeInvidiousVideo); } catch (e) {}
-    try { return (await fetchFromPiped(`/search?q=${encodeURIComponent(q)}&filter=${type === 'video' ? 'videos' : 'channels'}`)).items.map(normalizePipedVideo); } catch (e) {}
-    
-    const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
+    const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
     const results = await yt.search(q, { type });
-    return (results.videos || []).map(v => ({ 
-      videoId: v.id, title: v.title?.toString() || '', author: v.author?.name || '', 
-      authorId: v.author?.id || '', authorAvatar: v.author?.thumbnails?.[0]?.url || `https://ui-avatars.com/api/?name=${v.author?.name?.charAt(0)}&background=282828&color=fff`, 
-      lengthSeconds: v.duration?.seconds || 0, videoThumbnails: getThumbnail(v.id) 
-    }));
+    return (results.videos || []).map(mapYTNode);
+  },
+
+  channel: async (id) => {
+    // Fixes the 'g.channel is not a function' error
+    try {
+      const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
+      const channel = await yt.getChannel(id);
+      const videos = await channel.videos.next();
+      return {
+        author: channel.header.author.name,
+        authorId: id,
+        authorThumbnails: channel.header.author.thumbnails || [],
+        subCount: channel.header.subscriber_count?.text || 'Unknown',
+        description: channel.metadata.description || '',
+        latestVideos: videos.videos.map(mapYTNode)
+      };
+    } catch (e) {
+      console.error('Channel fetch failed:', e);
+      return { author: 'Unknown Channel', authorId: id, authorThumbnails: [], subCount: '0', description: 'Could not load channel details.', latestVideos: [] };
+    }
   },
 
   video: async (id) => {
+    // Use TV_EMBEDDED to get higher quality muxed streams (up to 720p)
     try {
-      const data = await fetchFromInvidious(`/api/v1/videos/${id}`);
-      return { videoId: id, title: data.title, author: data.author, authorId: data.authorId, authorAvatar: data.authorThumbnails?.[0]?.url || null, lengthSeconds: data.lengthSeconds, description: data.description, videoThumbnails: getThumbnail(id), formatStreams: data.formatStreams || [] };
-    } catch (e) {}
-
-    try {
-      const data = await fetchFromPiped(`/streams/${id}`);
-      const formats = (data.videoStreams || []).filter(s => !s.videoOnly && s.url).map(s => ({ url: s.url, qualityLabel: s.quality, container: 'mp4', type: 'video/mp4' }));
-      return { videoId: id, title: data.title, author: data.uploader, authorId: data.uploaderUrl?.replace('/channel/', ''), authorAvatar: data.uploaderAvatar || null, lengthSeconds: data.duration, description: data.description, videoThumbnails: getThumbnail(id), formatStreams: formats };
-    } catch (e) {}
-
-    try {
-      const yt = await Innertube.create({ client_type: 'WEB', generate_session_locally: true });
+      const yt = await Innertube.create({ client_type: ClientType.TV_EMBEDDED, generate_session_locally: true });
       const info = await yt.getInfo(id);
-      const formats = (info.streaming_data?.formats || []).map(f => ({ url: f.url || f.decipher?.(yt.session.player) || '', qualityLabel: f.quality_label, container: f.container, type: 'video/mp4' })).filter(f => f.url);
-      return { videoId: id, title: info.basic_info.title, author: info.basic_info.author, authorId: info.basic_info.channel_id, authorAvatar: info.basic_info.author?.thumbnails?.[0]?.url || null, lengthSeconds: info.basic_info.duration, description: info.basic_info.short_description, videoThumbnails: getThumbnail(id), formatStreams: formats };
-    } catch (e) {}
-
-    try {
-      const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
-      if (res.ok) {
-        const data = await res.json();
-        return {
-          videoId: id, title: data.title, author: data.author_name, authorId: '',
-          authorAvatar: `https://ui-avatars.com/api/?name=${data.author_name?.charAt(0)}&background=282828&color=fff`,
-          lengthSeconds: 0, description: 'Metadata loaded via fallback.',
-          videoThumbnails: [{ url: data.thumbnail_url }], formatStreams: []
-        };
-      }
-    } catch (e) {}
-
-    return { videoId: id, title: 'Video', author: 'Unknown', authorId: '', authorAvatar: null, lengthSeconds: 0, description: '', videoThumbnails: getThumbnail(id), formatStreams: [] };
+      
+      const formats = (info.streaming_data?.formats || [])
+        .filter(f => f.url)
+        .map(f => ({ 
+          url: f.url, 
+          qualityLabel: f.quality_label, 
+          contentLength: f.content_length, 
+          container: f.container, 
+          type: 'video/mp4' 
+        }));
+        
+      return { 
+        videoId: id, 
+        title: info.basic_info.title, 
+        author: info.basic_info.author, 
+        authorId: info.basic_info.channel_id, 
+        authorAvatar: info.basic_info.author?.thumbnails?.[0]?.url || `https://ui-avatars.com/api/?name=${info.basic_info.author?.charAt(0)}&background=282828&color=fff`, 
+        lengthSeconds: info.basic_info.duration, 
+        description: info.basic_info.short_description, 
+        videoThumbnails: getThumbnail(id), 
+        formatStreams: formats 
+      };
+    } catch (e) {
+      console.error('Video fetch failed:', e);
+      return { videoId: id, title: 'Video', author: 'Unknown', authorId: '', authorAvatar: null, lengthSeconds: 0, description: '', videoThumbnails: getThumbnail(id), formatStreams: [] };
+    }
   },
 
   comments: async (id) => {
     try {
-      const data = await fetchFromInvidious(`/api/v1/comments/${id}`);
-      return (data.comments || []).map(c => ({ commentId: c.commentId, author: c.author, content: c.content }));
-    } catch (e) {}
-    try {
-      const data = await fetchFromPiped(`/comments/${id}`);
-      return (data.comments || []).map(c => ({ commentId: c.id, author: c.author, content: c.commentText }));
+      const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
+      const comments = await yt.getComments(id);
+      return comments.contents.map(c => ({ commentId: c.comment_id, author: c.author.name, content: c.content.toString() }));
     } catch (e) { return []; }
   }
 };
