@@ -18,23 +18,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Fetch the proxy list (using standard global fetch, which is safe for static text)
     const proxyListResponse = await fetch(PROXY_LIST_URL);
     const proxyText = await proxyListResponse.text();
     
-    // 2. Filter and shuffle
     const proxies = proxyText.split('\n')
       .map(line => line.trim())
-      .filter(line => line !== '' && line.startsWith('http'))
-      .slice(0, 50); // Only take 50 to save memory
+      .filter(line => line.startsWith('http://') || line.startsWith('https://'));
 
-    if (proxies.length === 0) throw new Error('Proxy list empty.');
-    const shuffledProxies = proxies.sort(() => 0.5 - Math.random());
+    if (proxies.length === 0) {
+      return res.status(200).json({ proxy_error: 'Proxy list is empty' });
+    }
     
-    // 3. Strict limits to avoid Vercel's 10s timeout
-    const MAX_ATTEMPTS = 2; 
-    const TIMEOUT_MS = 2500; 
-
+    const shuffled = proxies.sort(() => 0.5 - Math.random()).slice(0, 2); // Try only 2 proxies
+    
     const headers = { ...req.headers };
     delete headers.host; 
     delete headers.connection; 
@@ -49,47 +45,46 @@ export default async function handler(req, res) {
       fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     }
 
-    // 4. Try proxies
-    for (let i = 0; i < Math.min(MAX_ATTEMPTS, shuffledProxies.length); i++) {
-      const proxyUrl = shuffledProxies[i];
-      console.log(`[Proxy] Attempt ${i + 1} using: ${proxyUrl}`);
-      
+    let lastError = 'No attempts made';
+    
+    for (const proxyUrl of shuffled) {
       try {
+        console.log(`[Proxy] Trying: ${proxyUrl}`);
         const dispatcher = new ProxyAgent(proxyUrl);
         
-        // Use undiciFetch explicitly so the dispatcher works
         const response = await undiciFetch(url, { 
           ...fetchOptions, 
           dispatcher,
-          signal: AbortSignal.timeout(TIMEOUT_MS) 
+          signal: AbortSignal.timeout(2500) // 2.5s timeout
         });
         
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('text/html')) {
-           console.warn(`[Proxy] ${proxyUrl} blocked (HTML). Trying next...`);
-           continue; 
-        }
-
         if (response.ok) {
-          console.log(`[Proxy] Success with ${proxyUrl}`);
-          res.status(response.status);
-          response.headers.forEach((value, key) => {
-            if (!['content-encoding', 'transfer-encoding', 'content-length'].includes(key.toLowerCase())) {
-              res.setHeader(key, value);
-            }
-          });
-          const data = await response.arrayBuffer();
-          return res.send(Buffer.from(data));
+          const contentType = response.headers.get('content-type') || '';
+          if (!contentType.includes('text/html')) {
+             console.log(`[Proxy] Success with: ${proxyUrl}`);
+             res.status(response.status);
+             response.headers.forEach((value, key) => {
+               if (!['content-encoding', 'transfer-encoding', 'content-length'].includes(key.toLowerCase())) {
+                 res.setHeader(key, value);
+               }
+             });
+             const data = await response.arrayBuffer();
+             return res.send(Buffer.from(data));
+          } else {
+            lastError = `HTML block from ${proxyUrl}`;
+          }
+        } else {
+          lastError = `Status ${response.status} from ${proxyUrl}`;
         }
-      } catch (error) {
-        console.warn(`[Proxy] ${proxyUrl} failed: ${error.message}`);
+      } catch (e) {
+        lastError = `Connection failed to ${proxyUrl}: ${e.message}`;
       }
     }
-
-    throw new Error(`All ${MAX_ATTEMPTS} attempts failed.`);
+    
+    // If all proxies fail, return 200 with the error so the frontend can see it
+    return res.status(200).json({ proxy_error: lastError });
+    
   } catch (error) {
-    console.error('[Proxy] Fatal error:', error);
-    // Return the actual error message so you can see it in the frontend
-    res.status(500).json({ error: 'Proxy failed', details: error.message });
+    return res.status(200).json({ proxy_error: `Fatal error: ${error.message}` });
   }
 }
