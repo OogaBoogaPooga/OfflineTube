@@ -1,36 +1,28 @@
 // src/api/piped-client.js
 import { Innertube, ClientType } from 'youtubei.js';
 
-// A rotation of reliable CORS proxies
-const CORS_PROXIES = [
-  'https://corsproxy.io/?',
-  'https://api.codetabs.com/v1/proxy?quest=',
-  'https://api.allorigins.win/raw?url='
-];
+// PASTE YOUR CLOUDFLARE WORKER URL HERE (NO trailing slash)
+const CORS_PROXY_URL = 'https://offline-tube-cors-proxy.logan-storrs.workers.dev/';
 
 function getProxyFetch() {
   return async (input, init = {}) => {
-    let url = typeof input === 'string' ? input : (input?.url || input?.href);
+    const url = typeof input === 'string' ? input : (input?.url || input?.href);
     
-    // Catch the "undefined" crash before it happens
     if (!url || url === 'undefined') {
-      return new Response(JSON.stringify({}), { 
-        status: 200, 
-        headers: { 'Content-Type': 'application/json' } 
-      });
+      return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // Try each proxy until one works
-    for (const proxy of CORS_PROXIES) {
-      try {
-        const proxyUrl = `${proxy}${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl, init);
-        if (response.ok) return response;
-      } catch (e) {
-        // Silently fail and try the next proxy
-      }
+    const proxyUrl = `${CORS_PROXY_URL}?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl, init);
+    
+    // Debugging: If the Worker returns an error (403, 500, etc.), log it
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Worker Error] ${response.status} on URL: ${url}`, errorText);
+      throw new Error(`Worker proxy failed with status ${response.status}`);
     }
-    throw new Error('All CORS proxies failed');
+    
+    return response;
   };
 }
 
@@ -55,7 +47,7 @@ export const api = {
     try {
       const yt = await Innertube.create({ 
         client_type: ClientType.TV_EMBEDDED, 
-        retrieve_player: false, // PREVENTS THE CRASH
+        retrieve_player: false,
         generate_session_locally: true,
         fetch: getProxyFetch()
       });
@@ -64,16 +56,17 @@ export const api = {
         try {
           const feed = await yt.getHomeFeed();
           if (feed.videos && feed.videos.length > 0) return feed.videos.map(mapYTNode);
-        } catch (e) {}
+        } catch (e) {
+          console.warn('Home feed failed, falling back to search:', e);
+        }
       }
       
-      // Fallback to searches for pagination or if home feed fails
       const queries = ['trending videos', 'popular tech', 'gaming highlights', 'news today', 'top documentaries'];
       const query = queries[(page - 1) % queries.length];
       const results = await yt.search(query, { type: 'video' });
       return results.videos.map(mapYTNode);
     } catch (e) {
-      console.error('Home feed failed:', e);
+      console.error('Popular fetch completely failed:', e);
       return [];
     }
   },
