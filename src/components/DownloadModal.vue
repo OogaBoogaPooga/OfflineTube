@@ -8,7 +8,6 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 const downloads = useDownloadsStore()
 
-// Sort formats from highest to lowest quality
 const formats = (props.video.formatStreams || []).sort((a, b) => {
   const hA = parseInt(a.qualityLabel) || 0;
   const hB = parseInt(b.qualityLabel) || 0;
