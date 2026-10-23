@@ -35,10 +35,9 @@ async function load(id) {
   
   try {
     video.value = await api.video(id)
-    try {
-      const related = await api.search(video.value.title || 'trending', 'video')
-      upNext.value = related.filter(v => v.videoId !== id).slice(0, 8)
-    } catch (err) {}
+    if (video.value.related && video.value.related.length > 0) {
+      upNext.value = video.value.related.filter(v => v.videoId !== id).slice(0, 8)
+    }
   } catch (e) {
     error.value = String(e.message || e)
     const local = await db.videos.get(id)
@@ -85,12 +84,13 @@ const handleAvatarError = (e) => { e.target.src = `https://ui-avatars.com/api/?n
         
         <div class="flex flex-wrap items-center justify-between gap-4 mt-3 border-b border-white/10 pb-4">
           <div class="flex items-center gap-3">
-            <RouterLink :to="`/channel/${video.authorId}`" class="w-11 h-11 rounded-full bg-surface-2 flex items-center justify-center text-lg font-bold text-muted shrink-0 overflow-hidden">
+            <!-- Only route to channel if authorId exists -->
+            <component :is="video.authorId ? 'RouterLink' : 'div'" :to="video.authorId ? `/channel/${video.authorId}` : null" class="w-11 h-11 rounded-full bg-surface-2 flex items-center justify-center text-lg font-bold text-muted shrink-0 overflow-hidden">
               <img v-if="video.authorAvatar" :src="video.authorAvatar" @error="handleAvatarError" class="w-full h-full object-cover" />
               <span v-else>{{ video.author?.charAt(0) || '?' }}</span>
-            </RouterLink>
+            </component>
             <div>
-              <RouterLink :to="`/channel/${video.authorId}`" class="font-bold hover:text-white block">{{ video.author }}</RouterLink>
+              <component :is="video.authorId ? 'RouterLink' : 'span'" :to="video.authorId ? `/channel/${video.authorId}` : null" class="font-bold hover:text-white block">{{ video.author }}</component>
               <span class="text-xs text-muted">Visit Channel</span>
             </div>
             <button class="ml-2 px-4 py-1.5 rounded-full bg-accent hover:bg-red-700 text-white text-sm font-medium transition-colors">
