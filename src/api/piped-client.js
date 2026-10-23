@@ -1,13 +1,16 @@
 // src/api/piped-client.js
 import { Innertube, ClientType } from 'youtubei.js';
 
-const BACKEND_PROXY = '/api/proxy';
+// A reliable public CORS proxy
+const CORS_PROXY = 'https://corsproxy.io/?';
 
-// A larger pool of instances to ensure we get metadata
-const INVIDIOUS_INSTANCES = ['https://invidious.f5.si', 'https://inv.thepixora.com', 'https://yewtu.be'];
-const PIPED_INSTANCES = ['https://pipedapi.kavin.rocks', 'https://api.piped.private.coffee', 'https://pipedapi.leptons.xyz', 'https://pipedapi.nosebs.ru'];
-
-const CATEGORIES = ['trending', 'technology', 'gaming', 'news', 'documentary', 'science', 'comedy', 'sports'];
+function getProxyFetch() {
+  return async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input.url;
+    const proxyUrl = `${CORS_PROXY}${encodeURIComponent(url)}`;
+    return fetch(proxyUrl, init);
+  };
+}
 
 function getThumbnail(videoId) {
   return [{ url: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` }];
@@ -15,69 +18,64 @@ function getThumbnail(videoId) {
 
 function mapYTNode(v) {
   return {
-    videoId: v.id || v.videoId,
+    videoId: v.id,
     title: v.title?.toString() || 'Untitled',
-    author: v.author?.name || v.author || 'Unknown',
-    authorId: v.author?.id || v.authorId || '',
-    authorAvatar: v.author?.thumbnails?.[0]?.url || v.authorThumbnails?.[0]?.url || null,
-    lengthSeconds: v.duration?.seconds || v.lengthSeconds || 0,
-    videoThumbnails: getThumbnail(v.id || v.videoId)
+    author: v.author?.name || 'Unknown',
+    authorId: v.author?.id || '',
+    authorAvatar: v.author?.thumbnails?.[0]?.url || `https://ui-avatars.com/api/?name=${v.author?.name?.charAt(0)}&background=282828&color=fff`,
+    lengthSeconds: v.duration?.seconds || 0,
+    videoThumbnails: getThumbnail(v.id)
   };
-}
-
-async function fetchFromInvidious(endpoint) {
-  for (const instance of INVIDIOUS_INSTANCES) {
-    try { const res = await fetch(`${instance}${endpoint}`); if (res.ok) return await res.json(); } catch (e) {}
-  }
-  throw new Error('Invidious failed');
-}
-
-async function fetchFromPiped(endpoint) {
-  for (const instance of PIPED_INSTANCES) {
-    try {
-      const proxyUrl = `${BACKEND_PROXY}?url=${encodeURIComponent(instance + endpoint)}`;
-      const res = await fetch(proxyUrl); if (res.ok) return await res.json();
-    } catch (e) {}
-  }
-  throw new Error('Piped failed');
 }
 
 export const api = {
   popular: async (page = 1) => {
-    const query = CATEGORIES[(page - 1) % CATEGORIES.length];
-    
-    // 1. Try Invidious Search (reliable metadata)
-    try { 
-      const data = await fetchFromInvidious(`/api/v1/search?q=${encodeURIComponent(query)}&type=video`);
-      if (data.length > 0) return data.map(mapYTNode); 
-    } catch (e) {}
-    
-    // 2. Try Piped Search
-    try { 
-      const data = await fetchFromPiped(`/search?q=${encodeURIComponent(query)}&filter=videos`);
-      if (data.items && data.items.length > 0) return data.items.map(mapYTNode); 
-    } catch (e) {}
-    
-    // 3. Fallback to youtubei.js
+    // Using the IOS client for a better home feed
     try {
-      const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
+      const yt = await Innertube.create({ 
+        client_type: ClientType.IOS, 
+        generate_session_locally: true,
+        fetch: getProxyFetch()
+      });
+      
+      // If page is 1, try to get the actual home feed
+      if (page === 1) {
+        const feed = await yt.getHomeFeed();
+        if (feed.videos && feed.videos.length > 0) {
+          return feed.videos.map(mapYTNode);
+        }
+      }
+      
+      // Fallback for pagination or if home feed fails
+      const queries = ['trending videos', 'popular tech', 'gaming highlights', 'news today', 'top documentaries'];
+      const query = queries[(page - 1) % queries.length];
       const results = await yt.search(query, { type: 'video' });
       return results.videos.map(mapYTNode);
-    } catch (e) { return []; }
+    } catch (e) {
+      console.error('Home feed failed:', e);
+      return [];
+    }
   },
 
   search: async (q, type = 'video') => {
-    try { return (await fetchFromInvidious(`/api/v1/search?q=${encodeURIComponent(q)}&type=${type}`)).map(mapYTNode); } catch (e) {}
-    try { return (await fetchFromPiped(`/search?q=${encodeURIComponent(q)}&filter=${type === 'video' ? 'videos' : 'channels'}`)).items.map(mapYTNode); } catch (e) {}
-    
-    const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
-    const results = await yt.search(q, { type });
-    return (results.videos || []).map(mapYTNode);
+    try {
+      const yt = await Innertube.create({ 
+        client_type: ClientType.IOS, 
+        generate_session_locally: true,
+        fetch: getProxyFetch()
+      });
+      const results = await yt.search(q, { type });
+      return (results.videos || []).map(mapYTNode);
+    } catch (e) { return []; }
   },
 
   channel: async (id) => {
     try {
-      const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
+      const yt = await Innertube.create({ 
+        client_type: ClientType.IOS, 
+        generate_session_locally: true,
+        fetch: getProxyFetch()
+      });
       const channel = await yt.getChannel(id);
       const videos = await channel.videos.next();
       return {
@@ -88,78 +86,63 @@ export const api = {
         description: channel.metadata.description || '',
         latestVideos: videos.videos.map(mapYTNode)
       };
-    } catch (e) {
-      return { author: 'Unknown Channel', authorId: id, authorThumbnails: [], subCount: '0', description: '', latestVideos: [] };
+    } catch (e) { 
+      return { author: 'Unknown Channel', authorId: id, authorThumbnails: [], subCount: '0', description: '', latestVideos: [] }; 
     }
   },
 
   video: async (id) => {
-    // 1. Try Invidious (Provides metadata AND related videos AND streams)
     try {
-      const data = await fetchFromInvidious(`/api/v1/videos/${id}`);
-      return { 
-        videoId: id, title: data.title, author: data.author, authorId: data.authorId, 
-        authorAvatar: data.authorThumbnails?.[0]?.url || null, 
-        lengthSeconds: data.lengthSeconds, description: data.description, 
-        videoThumbnails: getThumbnail(id), formatStreams: data.formatStreams || [],
-        related: (data.recommendedVideos || []).slice(0, 10).map(mapYTNode)
-      };
-    } catch (e) {}
-
-    // 2. Try Piped (Provides metadata AND related videos AND streams)
-    try {
-      const data = await fetchFromPiped(`/streams/${id}`);
-      const formats = (data.videoStreams || []).filter(s => !s.videoOnly && s.url).map(s => ({ url: s.url, qualityLabel: s.quality, container: 'mp4', type: 'video/mp4' }));
-      return { 
-        videoId: id, title: data.title, author: data.uploader, authorId: data.uploaderUrl?.replace('/channel/', ''), 
-        authorAvatar: data.uploaderAvatar || null, 
-        lengthSeconds: data.duration, description: data.description, 
-        videoThumbnails: getThumbnail(id), formatStreams: formats,
-        related: (data.relatedStreams || []).slice(0, 10).map(mapYTNode)
-      };
-    } catch (e) {}
-
-    // 3. Fallback to youtubei.js TV client (Streams only, no related videos)
-    try {
-      const yt = await Innertube.create({ client_type: ClientType.TV_EMBEDDED, generate_session_locally: true });
+      // Switch to IOS client to unlock higher quality muxed streams (720p/1080p)
+      const yt = await Innertube.create({ 
+        client_type: ClientType.IOS, 
+        generate_session_locally: true,
+        fetch: getProxyFetch()
+      });
       const info = await yt.getInfo(id);
-      const formats = (info.streaming_data?.formats || []).map(f => ({ url: f.url, qualityLabel: f.quality_label, container: f.container, type: 'video/mp4' })).filter(f => f.url);
+      
+      const formats = (info.streaming_data?.formats || [])
+        .filter(f => f.url)
+        .map(f => ({ 
+          url: f.url, 
+          qualityLabel: f.quality_label, 
+          contentLength: f.content_length, 
+          container: f.container, 
+          type: 'video/mp4' 
+        }));
+        
+      const related = (info.watch_next_feed || [])
+        .filter(v => v.type === 'CompactVideo')
+        .map(v => mapYTNode(v))
+        .slice(0, 10);
+
       return { 
-        videoId: id, title: info.basic_info.title, author: info.basic_info.author, authorId: info.basic_info.channel_id, 
-        authorAvatar: info.basic_info.author?.thumbnails?.[0]?.url || null, 
-        lengthSeconds: info.basic_info.duration, description: info.basic_info.short_description, 
-        videoThumbnails: getThumbnail(id), formatStreams: formats,
-        related: []
+        videoId: id, 
+        title: info.basic_info.title, 
+        author: info.basic_info.author, 
+        authorId: info.basic_info.channel_id, 
+        authorAvatar: info.basic_info.author?.thumbnails?.[0]?.url || `https://ui-avatars.com/api/?name=${info.basic_info.author?.charAt(0)}&background=282828&color=fff`, 
+        lengthSeconds: info.basic_info.duration, 
+        description: info.basic_info.short_description, 
+        videoThumbnails: getThumbnail(id), 
+        formatStreams: formats,
+        related
       };
-    } catch (e) {}
-
-    // 4. Ultimate Fallback (oEmbed)
-    try {
-      const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
-      if (res.ok) {
-        const data = await res.json();
-        // Try to extract the channel handle from the author_url
-        const handle = data.author_url?.split('@')[1] || '';
-        return {
-          videoId: id, title: data.title, author: data.author_name, authorId: handle,
-          authorAvatar: `https://ui-avatars.com/api/?name=${data.author_name?.charAt(0)}&background=282828&color=fff`,
-          lengthSeconds: 0, description: 'Metadata loaded via fallback.',
-          videoThumbnails: [{ url: data.thumbnail_url }], formatStreams: [], related: []
-        };
-      }
-    } catch (e) {}
-
-    return { videoId: id, title: 'Video', author: 'Unknown', authorId: '', authorAvatar: null, lengthSeconds: 0, description: '', videoThumbnails: getThumbnail(id), formatStreams: [], related: [] };
+    } catch (e) {
+      console.error('Video fetch failed:', e);
+      return { videoId: id, title: 'Video', author: 'Unknown', authorId: '', authorAvatar: null, lengthSeconds: 0, description: '', videoThumbnails: getThumbnail(id), formatStreams: [], related: [] };
+    }
   },
 
   comments: async (id) => {
     try {
-      const data = await fetchFromInvidious(`/api/v1/comments/${id}`);
-      return (data.comments || []).map(c => ({ commentId: c.commentId, author: c.author, content: c.content }));
-    } catch (e) {}
-    try {
-      const data = await fetchFromPiped(`/comments/${id}`);
-      return (data.comments || []).map(c => ({ commentId: c.id, author: c.author, content: c.commentText }));
+      const yt = await Innertube.create({ 
+        client_type: ClientType.WEB, 
+        generate_session_locally: true,
+        fetch: getProxyFetch()
+      });
+      const comments = await yt.getComments(id);
+      return comments.contents.map(c => ({ commentId: c.comment_id, author: c.author.name, content: c.content.toString() }));
     } catch (e) { return []; }
   }
 };
