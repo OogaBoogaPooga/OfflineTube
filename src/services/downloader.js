@@ -10,9 +10,10 @@ function aborted(signal) {
 
 export async function downloadVideo(video, streamUrl, { onProgress, signal } = {}) {
   const id = video.videoId
-  const url = resolveUrl(streamUrl)
-  // Route the download through our backend proxy to bypass CORS
-  const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`
+  const rawUrl = resolveUrl(streamUrl)
+  
+  // Route through a public CORS proxy to bypass YouTube's block
+  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`
 
   await clearChunks(id)
   await db.videos.put({
@@ -24,7 +25,6 @@ export async function downloadVideo(video, streamUrl, { onProgress, signal } = {
   let supportsRange = false
   let total = 0
   try {
-    // Probe using the proxy
     const probe = await fetch(proxyUrl, {
       method: 'GET',
       headers: { Range: 'bytes=0-0' },
@@ -37,13 +37,10 @@ export async function downloadVideo(video, streamUrl, { onProgress, signal } = {
       supportsRange = total > 0
     } else if (probe.status === 200) {
       total = parseInt(probe.headers.get('content-length') || '0', 10)
-    } else {
-      throw new Error(`Probe failed: ${probe.status}`)
     }
     probe.body?.cancel?.().catch(() => {})
   } catch (e) {
     if (e.name === 'AbortError') throw e
-    supportsRange = false
   }
 
   if (supportsRange && total > 0) {
@@ -55,12 +52,12 @@ export async function downloadVideo(video, streamUrl, { onProgress, signal } = {
         const start = seq * CHUNK_SIZE
         const end = Math.min(start + CHUNK_SIZE - 1, total - 1)
         
-        // Fetch chunks using the proxy
         const res = await fetch(proxyUrl, {
           headers: { Range: `bytes=${start}-${end}` },
           signal
         })
-        if (res.status !== 206) throw new Error(`Range rejected mid-flight (${res.status})`)
+        
+        if (!res.ok) throw new Error(`Chunk failed: ${res.status}`)
         const blob = await res.blob()
         await db.chunks.add({ videoId: id, seq, blob })
         downloaded += blob.size
@@ -77,13 +74,14 @@ export async function downloadVideo(video, streamUrl, { onProgress, signal } = {
     }
   }
 
-  // Full fetch fallback using proxy
+  // Fallback: Full fetch
   const res = await fetch(proxyUrl, { signal })
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
   const contentLength = parseInt(res.headers.get('content-length') || '0', 10)
   const reader = res.body.getReader()
   const parts = []
   let loaded = 0
+  
   while (true) {
     aborted(signal)
     const { done, value } = await reader.read()
