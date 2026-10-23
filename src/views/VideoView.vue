@@ -41,9 +41,16 @@ async function load(id) {
   
   try {
     video.value = await api.video(id)
+    
     // Fetch some related/up-next videos using search
-    const related = await api.search(video.value.title || 'trending', 'video')
-    upNext.value = related.filter(v => v.videoId !== id).slice(0, 8)
+    try {
+      const related = await api.search(video.value.title || 'trending', 'video')
+      upNext.value = related.filter(v => v.videoId !== id).slice(0, 8)
+    } catch (err) {
+      console.warn('Failed to load Up Next sidebar', err)
+      // We do not throw here, so the video still plays even if related videos fail
+    }
+
   } catch (e) {
     error.value = String(e.message || e)
     const local = await db.videos.get(id)
@@ -91,6 +98,7 @@ watch(() => route.params.id, (id) => { if (id) load(id) })
             :video-id="isOffline ? null : route.params.id"
             :offline-video-id="isOffline ? route.params.id : null"
             :poster="poster"
+            :has-stream="!!stream"
           />
         </div>
 
