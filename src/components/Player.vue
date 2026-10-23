@@ -1,26 +1,20 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import shaka from 'shaka-player/dist/shaka-player.compiled.js'
 
 const props = defineProps({
   videoId: { type: String, default: null },
   offlineVideoId: { type: String, default: null },
-  poster: { type: String, default: null },
-  hasStream: { type: Boolean, default: true }
+  poster: { type: String, default: null }
 })
 
 const videoEl = ref(null)
 const error = ref(null)
-const forceIframe = ref(false)
-
 let player = null
 let objectUrl = null
 
-const useIframe = computed(() => {
-  if (props.offlineVideoId) return false;
-  if (forceIframe.value) return true;
-  return props.videoId && !props.hasStream;
-})
+// Use the official YouTube iframe for all online videos to bypass IP blocks
+const useIframe = computed(() => props.videoId && !props.offlineVideoId)
 
 async function setupPlayer() {
   if (useIframe.value) return
@@ -42,12 +36,6 @@ async function setupPlayer() {
   }
 }
 
-// Watch for changes to reset the iframe fallback
-watch(() => props.videoId, () => {
-  forceIframe.value = false
-  error.value = null
-})
-
 onMounted(setupPlayer)
 onBeforeUnmount(() => {
   if (player) player.destroy()
@@ -57,16 +45,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="relative w-full h-full bg-black flex items-center justify-center">
-    <!-- Iframe Fallback -->
+    <!-- Official YouTube Iframe for online videos -->
     <iframe 
       v-if="useIframe"
-      :src="`https://www.youtube.com/embed/${videoId}?autoplay=1`"
+      :src="`https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0`"
       class="w-full h-full border-0"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       allowfullscreen
     ></iframe>
 
-    <!-- Standard Player -->
+    <!-- Shaka Player for offline videos -->
     <video
       v-else
       ref="videoEl"
@@ -74,7 +62,6 @@ onBeforeUnmount(() => {
       playsinline
       :poster="poster || undefined"
       class="w-full h-full"
-      @error="forceIframe = true"
     ></video>
     
     <div v-if="error" class="absolute inset-0 flex items-center justify-center text-red-400 p-4 text-center bg-black/80">
