@@ -14,11 +14,15 @@ function getProxyFetch() {
 
     const proxyUrl = `${CORS_PROXY_URL}?url=${encodeURIComponent(url)}`;
     
-    // THE FIX: Strip the body for GET/HEAD requests to satisfy the browser
     const options = { ...init };
+    
+    // 1. Strip body for GET/HEAD
     if (options.method === 'GET' || options.method === 'HEAD' || !options.method) {
       delete options.body;
     }
+
+    // 2. Prevent credentials from being sent, bypassing CORS credential requirements
+    options.credentials = 'omit';
 
     const response = await fetch(proxyUrl, options);
     
