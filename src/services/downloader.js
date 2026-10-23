@@ -1,3 +1,4 @@
+// src/services/downloader.js
 import { resolveUrl } from '../api/piped-client'
 import { db, clearChunks } from '../db'
 
@@ -10,26 +11,21 @@ function aborted(signal) {
 export async function downloadVideo(video, streamUrl, { onProgress, signal } = {}) {
   const id = video.videoId
   const url = resolveUrl(streamUrl)
+  // Route the download through our backend proxy to bypass CORS
+  const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`
 
   await clearChunks(id)
   await db.videos.put({
-    id,
-    title: video.title,
-    author: video.author,
-    authorId: video.authorId,
-    lengthSeconds: video.lengthSeconds,
-    thumbnail: video.videoThumbnails?.[0]?.url || null,
-    status: 'downloading',
-    progress: 0,
-    size: 0,
-    addedAt: Date.now(),
-    downloadedAt: null
+    id, title: video.title, author: video.author, authorId: video.authorId,
+    lengthSeconds: video.lengthSeconds, thumbnail: video.videoThumbnails?.[0]?.url || null,
+    status: 'downloading', progress: 0, size: 0, addedAt: Date.now(), downloadedAt: null
   })
 
   let supportsRange = false
   let total = 0
   try {
-    const probe = await fetch(url, {
+    // Probe using the proxy
+    const probe = await fetch(proxyUrl, {
       method: 'GET',
       headers: { Range: 'bytes=0-0' },
       signal
@@ -58,7 +54,9 @@ export async function downloadVideo(video, streamUrl, { onProgress, signal } = {
         aborted(signal)
         const start = seq * CHUNK_SIZE
         const end = Math.min(start + CHUNK_SIZE - 1, total - 1)
-        const res = await fetch(url, {
+        
+        // Fetch chunks using the proxy
+        const res = await fetch(proxyUrl, {
           headers: { Range: `bytes=${start}-${end}` },
           signal
         })
@@ -68,12 +66,7 @@ export async function downloadVideo(video, streamUrl, { onProgress, signal } = {
         downloaded += blob.size
         onProgress?.({ progress: downloaded / total, downloaded, total })
       }
-      await db.videos.update(id, {
-        status: 'complete',
-        progress: 1,
-        size: total,
-        downloadedAt: Date.now()
-      })
+      await db.videos.update(id, { status: 'complete', progress: 1, size: total, downloadedAt: Date.now() })
       return { success: true, size: total }
     } catch (e) {
       if (e.name === 'AbortError') {
@@ -84,7 +77,8 @@ export async function downloadVideo(video, streamUrl, { onProgress, signal } = {
     }
   }
 
-  const res = await fetch(url, { signal })
+  // Full fetch fallback using proxy
+  const res = await fetch(proxyUrl, { signal })
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
   const contentLength = parseInt(res.headers.get('content-length') || '0', 10)
   const reader = res.body.getReader()
@@ -108,11 +102,6 @@ export async function downloadVideo(video, streamUrl, { onProgress, signal } = {
     await db.chunks.add({ videoId: id, seq: seq++, blob: slice })
   }
 
-  await db.videos.update(id, {
-    status: 'complete',
-    progress: 1,
-    size: blob.size,
-    downloadedAt: Date.now()
-  })
+  await db.videos.update(id, { status: 'complete', progress: 1, size: blob.size, downloadedAt: Date.now() })
   return { success: true, size: blob.size }
 }
