@@ -3,6 +3,18 @@ import { Innertube, ClientType } from 'youtubei.js';
 
 const BACKEND_PROXY = '/api/proxy';
 
+const ROTATION_QUERIES = [
+  'trending', 
+  'technology', 
+  'gaming', 
+  'news', 
+  'documentary', 
+  'science', 
+  'comedy', 
+  'sports highlights'
+];
+let currentQueryIndex = 0;
+
 function getThumbnail(videoId) {
   return [{ url: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` }];
 }
@@ -19,35 +31,75 @@ function mapYTNode(v) {
   };
 }
 
+async function fetchFromInvidious(endpoint) {
+  const instances = ['https://invidious.f5.si', 'https://inv.thepixora.com'];
+  for (const instance of instances) {
+    try { const res = await fetch(`${instance}${endpoint}`); if (res.ok) return await res.json(); } catch (e) {}
+  }
+  throw new Error('Invidious failed');
+}
+
+async function fetchFromPiped(endpoint) {
+  const instances = ['https://api.piped.private.coffee', 'https://pipedapi.leptons.xyz'];
+  for (const instance of instances) {
+    try {
+      const proxyUrl = `${BACKEND_PROXY}?url=${encodeURIComponent(instance + endpoint)}`;
+      const res = await fetch(proxyUrl); if (res.ok) return await res.json();
+    } catch (e) {}
+  }
+  throw new Error('Piped failed');
+}
+
 export const api = {
   popular: async () => {
-    // 1. Try to get the standard YouTube Home Feed
+    // 1. Try the YouTube Home Feed (works sometimes)
     try {
       const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
       const feed = await yt.getHomeFeed();
       if (feed.videos && feed.videos.length > 0) {
         return feed.videos.map(mapYTNode);
       }
-    } catch (e) { console.warn('Home feed failed, trying search...'); }
-
-    // 2. Fallback to a general search if the home feed fails
-    try {
-      const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
-      const results = await yt.search('trending', { type: 'video' });
-      return results.videos.map(mapYTNode);
     } catch (e) {}
 
+    // 2. Use a rotating category with the TV_EMBEDDED client (very reliable)
+    const query = ROTATION_QUERIES[currentQueryIndex % ROTATION_QUERIES.length];
+    currentQueryIndex++; // Advance the index for the next time
+
+    try {
+      const yt = await Innertube.create({ client_type: ClientType.TV_EMBEDDED, generate_session_locally: true });
+      const results = await yt.search(query, { type: 'video' });
+      if (results.videos && results.videos.length > 0) {
+        return results.videos.map(mapYTNode);
+      }
+    } catch (e) { console.warn('TV search failed, trying Invidious...'); }
+
+    // 3. Fallback to Invidious
+    try { 
+      const data = await fetchFromInvidious('/api/v1/popular');
+      if (data.length > 0) return data.map(v => ({ ...v, videoThumbnails: getThumbnail(v.videoId) })); 
+    } catch (e) {}
+
+    // 4. Fallback to Piped
+    try { 
+      const data = await fetchFromPiped('/trending?region=US');
+      if (data.items && data.items.length > 0) return data.items.map(v => ({ ...v, videoThumbnails: getThumbnail(v.url.replace('/watch?v=', '')) })); 
+    } catch (e) {}
+    
     return [];
   },
 
   search: async (q, type = 'video') => {
-    const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
-    const results = await yt.search(q, { type });
-    return (results.videos || []).map(mapYTNode);
+    try {
+      const yt = await Innertube.create({ client_type: ClientType.TV_EMBEDDED, generate_session_locally: true });
+      const results = await yt.search(q, { type });
+      return (results.videos || []).map(mapYTNode);
+    } catch (e) {
+      try { return (await fetchFromInvidious(`/api/v1/search?q=${encodeURIComponent(q)}&type=${type}`)).map(v => ({ ...v, videoThumbnails: getThumbnail(v.videoId) })); } catch (err) {}
+      return [];
+    }
   },
 
   channel: async (id) => {
-    // Fixes the 'g.channel is not a function' error
     try {
       const yt = await Innertube.create({ client_type: ClientType.WEB, generate_session_locally: true });
       const channel = await yt.getChannel(id);
@@ -61,13 +113,11 @@ export const api = {
         latestVideos: videos.videos.map(mapYTNode)
       };
     } catch (e) {
-      console.error('Channel fetch failed:', e);
       return { author: 'Unknown Channel', authorId: id, authorThumbnails: [], subCount: '0', description: 'Could not load channel details.', latestVideos: [] };
     }
   },
 
   video: async (id) => {
-    // Use TV_EMBEDDED to get higher quality muxed streams (up to 720p)
     try {
       const yt = await Innertube.create({ client_type: ClientType.TV_EMBEDDED, generate_session_locally: true });
       const info = await yt.getInfo(id);
@@ -94,7 +144,6 @@ export const api = {
         formatStreams: formats 
       };
     } catch (e) {
-      console.error('Video fetch failed:', e);
       return { videoId: id, title: 'Video', author: 'Unknown', authorId: '', authorAvatar: null, lengthSeconds: 0, description: '', videoThumbnails: getThumbnail(id), formatStreams: [] };
     }
   },
